@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import ase.data
 import ase.io
 import numpy as np
+import h5py
 
 from mace.tools import AtomicNumberTable
 
@@ -20,6 +21,9 @@ Forces = np.ndarray  # [..., 3]
 Stress = np.ndarray  # [6, ]
 Virials = np.ndarray  # [3,3]
 Charges = np.ndarray  # [..., 1]
+Dipoles = np.ndarray  # [..., 3]
+Quadrupoles = np.ndarray # [..., 3, 3]
+Octupoles = np.ndarray # [..., 3, 3, 3]
 Cell = np.ndarray  # [3,3]
 Pbc = tuple  # (3,)
 
@@ -37,6 +41,9 @@ class Configuration:
     virials: Optional[Virials] = None  # eV
     dipole: Optional[Vector] = None  # Debye
     charges: Optional[Charges] = None  # atomic unit
+    dipoles: Optional[Dipoles] = None  # atomic unit
+    quadrupoles: Optional[Quadrupoles] = None  # atomic unit
+    octupoles: Optional[Octupoles] = None  # atomic unit
     cell: Optional[Cell] = None
     pbc: Optional[Pbc] = None
 
@@ -235,6 +242,72 @@ def load_from_xyz(
         dipole_key=dipole_key,
         charges_key=charges_key,
     )
+    return atomic_energies_dict, configs
+
+
+def load_from_hdf5(
+    file_path: str,
+    subset_key: str,
+    config_type_weights: Dict,
+    energy_key: str = "energy",
+    forces_key: str = "forces",
+    stress_key: str = "stress",
+    virials_key: str = "virials",
+    dipole_key: str = "dipole",
+    charges_key: str = "mbis_charges",
+    dipoles_key: str = "mbis_dipoles",
+    quadrupoles_key: str = "mbis_quadrupoles",
+    octupoles_key: str = "mbis_octupoles",
+    extract_atomic_energies: bool = False,
+) -> Tuple[Dict[int, float], Configurations]:
+
+    logging.warning("NOT USING MACE UNITS")
+
+    pbc = tuple([False,False,False])
+    cell = np.array([[100,0,0],[0,100,0],[0,0,100]])
+    config_type = "Default"
+    weight = 1.0
+    energy_weight  = 1.0
+    forces_weight  = 1.0
+    stress_weight  = 1.0
+    virials_weight = 1.0
+
+    h5_file = h5py.File(file_path)
+
+    configs = []
+    for name in h5_file:
+        h5data = h5_file[name]
+        if np.array(h5data["subset"]).item() == b"SPICE Dipeptides Single Points Dataset v1.2":
+        #if np.array(h5data["subset"]).item() == subset_key:
+            #for idx in range(len(h5data["conformations"])):
+            for idx in range(1):
+                configs.append(Configuration(
+                    # replace these with general keys?
+                    atomic_numbers=np.array(h5data["atomic_numbers"]),
+                    positions=np.array(h5data["conformations"][idx,:,:]),
+                    energy=np.array(h5data["dft_total_energy"][idx]),
+                    forces=np.array(h5data["dft_total_gradient"][idx,:,:]),
+                    #stress=stress,
+                    #virials=virials,
+                    #dipole=dipole,
+                    charges=np.array(h5data[charges_key][idx,:,:]),
+                    dipoles=np.array(h5data[dipoles_key][idx,:,:]),
+                    quadrupoles=np.array(h5data[quadrupoles_key][idx,:,:,:]),
+                    octupoles=np.array(h5data[octupoles_key][idx,:,:,:,:]),
+
+                    weight=weight,
+                    energy_weight=energy_weight,
+                    forces_weight=forces_weight,
+                    stress_weight=stress_weight,
+                    virials_weight=virials_weight,
+                    config_type=config_type,
+                    pbc=pbc,
+                    cell=cell,
+                ))
+    
+    atomic_energies_dict = {}
+    # FUTURE: insert atomic energies stuff
+
     return atomic_energies_dict, configs
 
 

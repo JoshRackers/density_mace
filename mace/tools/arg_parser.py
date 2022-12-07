@@ -65,6 +65,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "DipoleRMSE",
             "DipoleMAE",
             "EnergyDipoleRMSE",
+            "MultipolesRMSE",
         ],
         default="PerAtomRMSE",
     )
@@ -81,6 +82,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "ScaleShiftBOTNet",
             "AtomicDipolesMACE",
             "EnergyDipolesMACE",
+            "AtomicMultipolesMACE",
         ],
     )
     parser.add_argument(
@@ -180,7 +182,16 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
 
     # Dataset
     parser.add_argument(
-        "--train_file", help="Training set xyz file", type=str, required=True
+        "--use_hdf5", 
+        help="Select True to get training data from hdf5 rather than xyz",
+        type=bool,
+        default=False,
+    )
+    parser.add_argument(
+        "--train_file", 
+        help="Training set xyz file", 
+        type=str, 
+        required=True
     )
     parser.add_argument(
         "--valid_file",
@@ -238,9 +249,33 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--charges_key",
-        help="Key of atomic charges in training xyz",
+        help="Key of atomic charges in training hdf5",
         type=str,
-        default="charges",
+        default="mbis_charges",
+    )
+    parser.add_argument(
+        "--dipoles_key",
+        help="Key of atomic dipoles in training hdf5",
+        type=str,
+        default="mbis_dipoles",
+    )
+    parser.add_argument(
+        "--quadrupoles_key",
+        help="Key of atomic quadrupoles in training hdf5",
+        type=str,
+        default="mbis_quadrupoles",
+    )
+    parser.add_argument(
+        "--octupoles_key",
+        help="Key of atomic octupoles in training hdf5",
+        type=str,
+        default="mbis_octupoles",
+    )
+    parser.add_argument(
+        "--highest_multipole_moment",
+        help="highest multipole moment to use for multipole models",
+        type=int,
+        default=0,
     )
 
     # Loss and optimization
@@ -256,6 +291,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "stress",
             "dipole",
             "energy_forces_dipole",
+            "multipoles",
         ],
     )
     parser.add_argument(

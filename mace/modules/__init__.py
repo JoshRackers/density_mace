@@ -8,9 +8,11 @@ from .blocks import (
     AtomicEnergiesBlock,
     EquivariantProductBasisBlock,
     InteractionBlock,
+    LinearGenericReadoutBlock,
     LinearDipoleReadoutBlock,
     LinearNodeEmbeddingBlock,
     LinearReadoutBlock,
+    NonLinearGenericReadoutBlock,
     NonLinearDipoleReadoutBlock,
     NonLinearReadoutBlock,
     RadialEmbeddingBlock,
@@ -20,6 +22,7 @@ from .blocks import (
     ScaleShiftBlock,
 )
 from .loss import (
+    MultipolesLoss,
     DipoleSingleLoss,
     EnergyForcesLoss,
     WeightedEnergyForcesDipoleLoss,
@@ -31,6 +34,7 @@ from .loss import (
 from .models import (
     MACE,
     AtomicDipolesMACE,
+    AtomicMultipolesMACE,
     BOTNet,
     EnergyDipolesMACE,
     ScaleShiftBOTNet,
@@ -84,6 +88,8 @@ __all__ = [
     "ScaleShiftMACE",
     "BOTNet",
     "ScaleShiftBOTNet",
+    "DensityMACE",
+    "AtomicMultipolesMACE"
     "AtomicDipolesMACE",
     "EnergyDipolesMACE",
     "EnergyForcesLoss",
@@ -92,6 +98,7 @@ __all__ = [
     "WeightedEnergyForcesVirialsLoss",
     "WeightedEnergyForcesStressLoss",
     "DipoleSingleLoss",
+    "MultipolesLoss",
     "WeightedEnergyForcesDipoleLoss",
     "SymmetricContraction",
     "interaction_classes",

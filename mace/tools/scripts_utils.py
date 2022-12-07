@@ -22,6 +22,94 @@ class SubsetCollection:
     valid: data.Configurations
     tests: List[Tuple[str, data.Configurations]]
 
+def get_dataset_from_spicehdf5(
+    train_path: str,
+    valid_path: str,
+    valid_fraction: float,
+    config_type_weights: Dict,
+    test_path: str = None,
+    seed: int = 1234,
+    energy_key: str = "energy",
+    forces_key: str = "forces",
+    stress_key: str = "stress",
+    virials_key: str = "virials",
+    dipole_key: str = "dipoles",
+    charges_key: str = "mbis_charges",
+    dipoles_key: str = "mbis_dipoles",
+    quadrupoles_key: str = "mbis_quadrupoles",
+    octupoles_key: str = "mbis_octupoles",
+) -> Tuple[SubsetCollection, Optional[Dict[int, float]]]:
+    """Load training and test dataset from xyz file"""
+    atomic_energies_dict, all_train_configs = data.load_from_hdf5(
+        file_path=train_path,
+        subset_key="SPICE Dipeptides Single Points Dataset v1.2",
+        config_type_weights=config_type_weights,
+        energy_key=energy_key,
+        forces_key=forces_key,
+        stress_key=stress_key,
+        virials_key=virials_key,
+        dipole_key=dipole_key,
+        charges_key=charges_key,
+        dipoles_key=dipoles_key,
+        quadrupoles_key=quadrupoles_key,
+        octupoles_key=octupoles_key,
+        extract_atomic_energies=True,
+    )
+    logging.info(
+        f"Loaded {len(all_train_configs)} training configurations from '{train_path}'"
+    )
+    if valid_path is not None:
+        _, valid_configs = data.load_from_hdf5(
+            file_path=valid_path,
+            config_type_weights=config_type_weights,
+            energy_key=energy_key,
+            forces_key=forces_key,
+            stress_key=stress_key,
+            virials_key=virials_key,
+            dipole_key=dipole_key,
+            charges_key=charges_key,
+            dipoles_key=dipoles_key,
+            quadrupoles_key=quadrupoles_key,
+            octupoles_key=octupoles_key,
+            extract_atomic_energies=False,
+        )
+        logging.info(
+            f"Loaded {len(valid_configs)} validation configurations from '{valid_path}'"
+        )
+        train_configs = all_train_configs
+    else:
+        logging.info(
+            "Using random %s%% of training set for validation", 100 * valid_fraction
+        )
+        train_configs, valid_configs = data.random_train_valid_split(
+            all_train_configs, valid_fraction, seed
+        )
+
+    test_configs = []
+    if test_path is not None:
+        _, all_test_configs = data.load_from_hdf5(
+            file_path=test_path,
+            config_type_weights=config_type_weights,
+            energy_key=energy_key,
+            forces_key=forces_key,
+            dipole_key=dipole_key,
+            charges_key=charges_key,
+            dipoles_key=dipoles_key,
+            quadrupoles_key=quadrupoles_key,
+            octupoles_key=octupoles_key,
+            extract_atomic_energies=False,
+        )
+        # create list of tuples (config_type, list(Atoms))
+        test_configs = data.test_config_types(all_test_configs)
+        logging.info(
+            f"Loaded {len(all_test_configs)} test configurations from '{test_path}'"
+        )
+    return (
+        SubsetCollection(train=train_configs, valid=valid_configs, tests=test_configs),
+        atomic_energies_dict,
+    )
+
+
 
 def get_dataset_from_xyz(
     train_path: str,
@@ -108,6 +196,7 @@ def create_error_table(
     loss_fn: torch.nn.Module,
     output_args: Dict[str, bool],
     device: str,
+    highest_multipole_moment: int = None,
 ) -> PrettyTable:
     table = PrettyTable()
     if table_type == "TotalRMSE":
@@ -166,6 +255,11 @@ def create_error_table(
             "rel F RMSE %",
             "RMSE MU / mDebye / atom",
             "rel MU RMSE %",
+        ]
+    elif table_type == "MultipolesRMSE":
+        table.field_names = [
+            "config_type",
+            "RMSE multipoles / au / atom",
         ]
     for name, subset in all_collections:
         data_loader = torch_geometric.dataloader.DataLoader(
@@ -256,6 +350,36 @@ def create_error_table(
                     f"{metrics['rel_rmse_mu']:.1f}",
                 ]
             )
+        elif table_type == "MultipolesRMSE":
+            if highest_multipole_moment >= 0:
+                table.add_row(
+                    [
+                        #name,metrics['rmse_charges_per_atom']
+                        name,
+                        f"{metrics['rmse_charges_per_atom'] * 1000:.2f}",
+                    ]
+                )
+            if highest_multipole_moment >= 1:
+                table.add_row(
+                    [
+                        name,
+                        f"{metrics['rmse_dipoles_per_atom'] * 1000:.2f}",
+                    ]
+                )
+            if highest_multipole_moment >= 2:
+                table.add_row(
+                    [
+                        name,
+                        f"{metrics['rmse_quadrupoles_per_atom'] * 1000:.2f}",
+                    ]
+                )
+            if highest_multipole_moment >= 3:
+                table.add_row(
+                    [
+                        name,
+                        f"{metrics['rmse_octupoles_per_atom'] * 1000:.2f}",
+                    ]
+                )
         elif table_type == "DipoleMAE":
             table.add_row(
                 [

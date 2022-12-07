@@ -55,6 +55,7 @@ def train(
     swa: Optional[SWAContainer] = None,
     ema: Optional[ExponentialMovingAverage] = None,
     max_grad_norm: Optional[float] = 10.0,
+    highest_multipole_moment: int = None,
 ):
     lowest_loss = np.inf
     patience_counter = 0
@@ -151,6 +152,27 @@ def train(
                 logging.info(
                     f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_MU_per_atom={error_mu:.2f} mDebye"
                 )
+            elif log_errors == "MultipolesRMSE":
+                if highest_multipole_moment >= 0:
+                    error_charges = eval_metrics["rmse_charges_per_atom"] * 1e3
+                    logging.info(
+                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_charges_per_atom={error_charges:.2f} "
+                    )
+                if highest_multipole_moment >= 1:
+                    error_dipoles = eval_metrics["rmse_dipoles_per_atom"] * 1e3
+                    logging.info(
+                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_dipoles_per_atom={error_dipoles:.2f} "
+                    )
+                if highest_multipole_moment >= 2:
+                    error_quadrupoles = eval_metrics["rmse_quadrupoles_per_atom"] * 1e3
+                    logging.info(
+                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_quadrupoles_per_atom={error_quadrupoles:.2f} "
+                    )
+                if highest_multipole_moment >= 3:
+                    error_octupoles = eval_metrics["rmse_octupoles_per_atom"] * 1e3
+                    logging.info(
+                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_octupoles_per_atom={error_octupoles:.2f} "
+                    )
             elif log_errors == "EnergyDipoleRMSE":
                 error_e = eval_metrics["rmse_e_per_atom"] * 1e3
                 error_f = eval_metrics["rmse_f"] * 1e3
@@ -215,7 +237,12 @@ def take_step(
         compute_virials=output_args["virials"],
         compute_stress=output_args["stress"],
     )
+    #print("train, output",output["charges"])
+    #print("train, batch ", batch["charges"])
     loss = loss_fn(pred=output, ref=batch)
+    #print("loss",loss)
+    #print(output["charges"].shape,batch["charges"].shape)
+    #print(output["dipoles"].shape,batch["dipoles"].shape)
     loss.backward()
     if max_grad_norm is not None:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_grad_norm)
@@ -233,12 +260,13 @@ def take_step(
 
 
 def evaluate(
-    model: torch.nn.Module,
-    loss_fn: torch.nn.Module,
-    data_loader: DataLoader,
-    output_args: Dict[str, bool],
-    device: torch.device,
-) -> Tuple[float, Dict[str, Any]]:
+        model: torch.nn.Module,
+        loss_fn: torch.nn.Module,
+        data_loader: DataLoader,
+        output_args: Dict[str, bool],
+        device: torch.device,
+    ) -> Tuple[float, Dict[str, Any]]:
+
     total_loss = 0.0
     E_computed = False
     delta_es_list = []
@@ -256,6 +284,18 @@ def evaluate(
     delta_mus_list = []
     delta_mus_per_atom_list = []
     mus_list = []
+    charges_computed = False
+    delta_charges_per_atom_list = []
+    charges_list = []
+    dipoles_computed = False
+    delta_dipoles_per_atom_list = []
+    dipoles_list = []
+    quadrupoles_computed = False
+    delta_quadrupoles_per_atom_list = []
+    quadrupoles_list = []
+    octupoles_computed = False
+    delta_octupoles_per_atom_list = []
+    octupoles_list = []
     batch = None  # for pylint
 
     start_time = time.time()
@@ -306,6 +346,23 @@ def evaluate(
                 / (batch.ptr[1:] - batch.ptr[:-1]).unsqueeze(-1)
             )
             mus_list.append(batch.dipole)
+        if output.get("charges") is not None and batch.charges is not None:
+            charges_computed = True
+            delta_charges_per_atom_list.append(batch.charges - output["charges"])
+            charges_list.append(batch.charges)
+        if output.get("dipoles") is not None and batch.dipoles is not None:
+            dipoles_computed = True
+            delta_dipoles_per_atom_list.append(batch.dipoles - output["dipoles"])
+            dipoles_list.append(batch.dipoles)
+        if output.get("quadrupoles") is not None and batch.quadrupoles is not None:
+            quadrupoles_computed = True
+            delta_quadrupoles_per_atom_list.append(batch.quadrupoles - output["quadrupoles"])
+            quadrupoles_list.append(batch.quadrupoles)
+        if output.get("octupoles") is not None and batch.octupoles is not None:
+            octupoles_computed = True
+            delta_octupoles_per_atom_list.append(batch.octupoles - output["octupoles"])
+            octupoles_list.append(batch.octupoles)
+        
 
     avg_loss = total_loss / len(data_loader)
 
@@ -354,6 +411,26 @@ def evaluate(
         aux["rmse_mu_per_atom"] = compute_rmse(delta_mus_per_atom)
         aux["rel_rmse_mu"] = compute_rel_rmse(delta_mus, mus)
         aux["q95_mu"] = compute_q95(delta_mus)
+    if charges_computed:
+        delta_charges_per_atom = to_numpy(torch.cat(delta_charges_per_atom_list, dim=0))
+        charges = to_numpy(torch.cat(charges_list, dim=0))
+        aux["mae_charges_per_atom"] = compute_mae(delta_charges_per_atom)
+        aux["rmse_charges_per_atom"] = compute_rmse(delta_charges_per_atom)
+    if dipoles_computed:
+        delta_dipoles_per_atom = to_numpy(torch.cat(delta_charges_per_atom_list, dim=0))
+        dipoles = to_numpy(torch.cat(dipoles_list, dim=0))
+        aux["mae_dipoles_per_atom"] = compute_mae(delta_dipoles_per_atom)
+        aux["rmse_dipoles_per_atom"] = compute_rmse(delta_dipoles_per_atom)
+    if quadrupoles_computed:
+        delta_quadrupoles_per_atom = to_numpy(torch.cat(delta_quadrupoles_per_atom_list, dim=0))
+        quadrupoles = to_numpy(torch.cat(quadrupoles_list, dim=0))
+        aux["mae_quadrupoles_per_atom"] = compute_mae(delta_quadrupoles_per_atom)
+        aux["rmse_quadrupoles_per_atom"] = compute_rmse(delta_quadrupoles_per_atom)
+    if octupoles_computed:
+        delta_octupoles_per_atom = to_numpy(torch.cat(delta_octupoles_per_atom_list, dim=0))
+        octupoles = to_numpy(torch.cat(octupoles_list, dim=0))
+        aux["mae_octupoles_per_atom"] = compute_mae(delta_octupoles_per_atom)
+        aux["rmse_octupoles_per_atom"] = compute_rmse(delta_octupoles_per_atom)
 
     aux["time"] = time.time() - start_time
 

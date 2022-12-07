@@ -18,7 +18,7 @@ from torch_ema import ExponentialMovingAverage
 import mace
 from mace import data, modules, tools
 from mace.tools import torch_geometric
-from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz
+from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, get_dataset_from_spicehdf5
 
 
 def main() -> None:
@@ -46,20 +46,41 @@ def main() -> None:
         config_type_weights = {"Default": 1.0}
 
     # Data preparation
-    collections, atomic_energies_dict = get_dataset_from_xyz(
-        train_path=args.train_file,
-        valid_path=args.valid_file,
-        valid_fraction=args.valid_fraction,
-        config_type_weights=config_type_weights,
-        test_path=args.test_file,
-        seed=args.seed,
-        energy_key=args.energy_key,
-        forces_key=args.forces_key,
-        stress_key=args.stress_key,
-        virials_key=args.virials_key,
-        dipole_key=args.dipole_key,
-        charges_key=args.charges_key,
-    )
+    if args.use_hdf5:
+        collections, atomic_energies_dict = get_dataset_from_spicehdf5(
+            train_path=args.train_file,
+            valid_path=args.valid_file,
+            valid_fraction=args.valid_fraction,
+            config_type_weights=config_type_weights,
+            test_path=args.test_file,
+            seed=args.seed,
+            energy_key=args.energy_key,
+            forces_key=args.forces_key,
+            stress_key=args.stress_key,
+            virials_key=args.virials_key,
+            dipole_key=args.dipole_key,
+            charges_key=args.charges_key,
+            dipoles_key=args.dipoles_key,
+            quadrupoles_key=args.quadrupoles_key,
+            octupoles_key=args.octupoles_key,
+        )
+    else:
+        collections, atomic_energies_dict = get_dataset_from_xyz(
+            train_path=args.train_file,
+            valid_path=args.valid_file,
+            valid_fraction=args.valid_fraction,
+            config_type_weights=config_type_weights,
+            test_path=args.test_file,
+            seed=args.seed,
+            energy_key=args.energy_key,
+            forces_key=args.forces_key,
+            stress_key=args.stress_key,
+            virials_key=args.virials_key,
+            dipole_key=args.dipole_key,
+            charges_key=args.charges_key,
+        )
+    
+    #print(collections.train[0])
 
     logging.info(
         f"Total number of configurations: train={len(collections.train)}, valid={len(collections.valid)}, "
@@ -80,6 +101,14 @@ def main() -> None:
         atomic_energies = None
         dipole_only = True
         compute_dipole = True
+        compute_energy = False
+        args.compute_forces = False
+        compute_virials = False
+        args.compute_stress = False
+    elif args.model == "AtomicMultipolesMACE":
+        atomic_energies = None
+        dipole_only = False
+        compute_dipole = False
         compute_energy = False
         args.compute_forces = False
         compute_virials = False
@@ -127,7 +156,7 @@ def main() -> None:
     train_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            for config in collections.train
+            for config in collections.train[:1]
         ],
         batch_size=args.batch_size,
         shuffle=True,
@@ -136,7 +165,7 @@ def main() -> None:
     valid_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            for config in collections.valid
+            for config in collections.valid[:1]
         ],
         batch_size=args.valid_batch_size,
         shuffle=False,
@@ -174,6 +203,8 @@ def main() -> None:
             forces_weight=args.forces_weight,
             dipole_weight=args.dipole_weight,
         )
+    elif args.loss == "multipoles":
+        loss_fn = modules.MultipolesLoss()
     else:
         loss_fn = modules.EnergyForcesLoss(
             energy_weight=args.energy_weight, forces_weight=args.forces_weight
@@ -197,6 +228,7 @@ def main() -> None:
         "virials": compute_virials,
         "stress": args.compute_stress,
         "dipoles": compute_dipole,
+        
     }
     logging.info(f"Selected the following outputs: {output_args}")
 
@@ -292,6 +324,17 @@ def main() -> None:
         ), "Use error_table EnergyDipoleRMSE with AtomicDipolesMACE model"
         model = modules.EnergyDipolesMACE(
             **model_config,
+            correlation=args.correlation,
+            gate=modules.gate_dict[args.gate],
+            interaction_cls_first=modules.interaction_classes[
+                "RealAgnosticInteractionBlock"
+            ],
+            MLP_irreps=o3.Irreps(args.MLP_irreps),
+        )
+    elif args.model == "AtomicMultipolesMACE":
+        model = modules.AtomicMultipolesMACE(
+            **model_config,
+            highest_multipole_moment=args.highest_multipole_moment,
             correlation=args.correlation,
             gate=modules.gate_dict[args.gate],
             interaction_cls_first=modules.interaction_classes[
@@ -443,6 +486,7 @@ def main() -> None:
         ema=ema,
         max_grad_norm=args.clip_grad,
         log_errors=args.error_table,
+        highest_multipole_moment=args.highest_multipole_moment,
     )
 
     epoch = checkpoint_handler.load_latest(
@@ -453,9 +497,11 @@ def main() -> None:
     # Evaluation on test datasets
     logging.info("Computing metrics for training, validation, and test sets")
 
+    print("collections",len(collections.train),len(collections.valid),len(collections.tests))
+
     all_collections = [
-        ("train", collections.train),
-        ("valid", collections.valid),
+        ("train", collections.train[:1]),
+        ("valid", collections.valid[:1]),
     ] + collections.tests
 
     table = create_error_table(
@@ -468,6 +514,7 @@ def main() -> None:
         loss_fn=loss_fn,
         output_args=output_args,
         device=device,
+        highest_multipole_moment=args.highest_multipole_moment,
     )
 
     logging.info("\n" + str(table))
