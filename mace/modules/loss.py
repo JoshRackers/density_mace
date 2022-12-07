@@ -78,7 +78,7 @@ def weighted_mean_squared_error_dipole(ref: Batch, pred: TensorDict) -> torch.Te
 
 
 def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> torch.Tensor:
-    return torch.mean(torch.square(ref[moment] - pred[moment]))  # []
+    return torch.mean(torch.square(ref[moment] - pred[moment])) * 1000  # []
 
 
 class EnergyForcesLoss(torch.nn.Module):

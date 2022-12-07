@@ -156,7 +156,7 @@ def train(
                 if highest_multipole_moment >= 0:
                     error_charges = eval_metrics["rmse_charges_per_atom"] * 1e3
                     logging.info(
-                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_charges_per_atom={error_charges:.2f} "
+                        f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_charges_per_atom={error_charges:.2f} "
                     )
                 if highest_multipole_moment >= 1:
                     error_dipoles = eval_metrics["rmse_dipoles_per_atom"] * 1e3
@@ -240,7 +240,7 @@ def take_step(
     #print("train, output",output["charges"])
     #print("train, batch ", batch["charges"])
     loss = loss_fn(pred=output, ref=batch)
-    #print("loss",loss)
+    print("loss",loss)
     #print(output["charges"].shape,batch["charges"].shape)
     #print(output["dipoles"].shape,batch["dipoles"].shape)
     loss.backward()

@@ -354,30 +354,29 @@ def create_error_table(
             if highest_multipole_moment >= 0:
                 table.add_row(
                     [
-                        #name,metrics['rmse_charges_per_atom']
                         name,
-                        f"{metrics['rmse_charges_per_atom'] * 1000:.2f}",
+                        f"{metrics['rmse_charges_per_atom']:.2f}",
                     ]
                 )
             if highest_multipole_moment >= 1:
                 table.add_row(
                     [
                         name,
-                        f"{metrics['rmse_dipoles_per_atom'] * 1000:.2f}",
+                        f"{metrics['rmse_dipoles_per_atom']:.2f}",
                     ]
                 )
             if highest_multipole_moment >= 2:
                 table.add_row(
                     [
                         name,
-                        f"{metrics['rmse_quadrupoles_per_atom'] * 1000:.2f}",
+                        f"{metrics['rmse_quadrupoles_per_atom']:.2f}",
                     ]
                 )
             if highest_multipole_moment >= 3:
                 table.add_row(
                     [
                         name,
-                        f"{metrics['rmse_octupoles_per_atom'] * 1000:.2f}",
+                        f"{metrics['rmse_octupoles_per_atom']:.2f}",
                     ]
                 )
         elif table_type == "DipoleMAE":
