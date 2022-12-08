@@ -78,7 +78,7 @@ def weighted_mean_squared_error_dipole(ref: Batch, pred: TensorDict) -> torch.Te
 
 
 def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> torch.Tensor:
-    return torch.mean(torch.square(ref[moment] - pred[moment])) * 1000  # []
+    return torch.mean(torch.square(ref[moment] - pred[moment])) * 10000  # []
 
 
 class EnergyForcesLoss(torch.nn.Module):
@@ -254,16 +254,28 @@ class WeightedEnergyForcesDipoleLoss(torch.nn.Module):
 
 
 class MultipolesLoss(torch.nn.Module):
-    def __init__(self, multipole_weight=1.0) -> None:
+    def __init__(self, multipole_weight=1.0, highest_multipole_moment: int = 0) -> None:
         super().__init__()
         self.register_buffer(
             "multipole_weight",
             torch.tensor(multipole_weight, dtype=torch.get_default_dtype()),
         )
+        self.register_buffer(
+            "highest_multipole_moment",
+            torch.tensor(highest_multipole_moment, dtype=torch.get_default_dtype()),
+        )
 
     def forward(self, ref: Batch, pred: TensorDict) -> torch.Tensor:
-        return (
-            self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="charges")
-        )
+        if self.highest_multipole_moment >= 0:
+            error = self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="charges")
+        if self.highest_multipole_moment >= 1:
+            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="dipoles")
+        if self.highest_multipole_moment >= 2:
+            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="quadrupoles")
+        if self.highest_multipole_moment >= 3:
+            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="octupoles")
+
+        return (error)
+
     def __repr__(self):
         return f"{self.__class__.__name__}(" f"multipole_weight={self.multipole_weight:.3f})"

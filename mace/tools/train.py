@@ -417,7 +417,7 @@ def evaluate(
         aux["mae_charges_per_atom"] = compute_mae(delta_charges_per_atom)
         aux["rmse_charges_per_atom"] = compute_rmse(delta_charges_per_atom)
     if dipoles_computed:
-        delta_dipoles_per_atom = to_numpy(torch.cat(delta_charges_per_atom_list, dim=0))
+        delta_dipoles_per_atom = to_numpy(torch.cat(delta_dipoles_per_atom_list, dim=0))
         dipoles = to_numpy(torch.cat(dipoles_list, dim=0))
         aux["mae_dipoles_per_atom"] = compute_mae(delta_dipoles_per_atom)
         aux["rmse_dipoles_per_atom"] = compute_rmse(delta_dipoles_per_atom)
