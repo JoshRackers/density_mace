@@ -80,8 +80,6 @@ def main() -> None:
             charges_key=args.charges_key,
         )
     
-    #print(collections.train[0])
-
     logging.info(
         f"Total number of configurations: train={len(collections.train)}, valid={len(collections.valid)}, "
         f"tests=[{', '.join([name + ': ' + str(len(test_configs)) for name, test_configs in collections.tests])}]"
@@ -156,7 +154,8 @@ def main() -> None:
     train_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            for config in collections.train[:10]
+            #for config in collections.train
+            for config in collections.train[:1]
         ],
         batch_size=args.batch_size,
         shuffle=True,
@@ -165,7 +164,8 @@ def main() -> None:
     valid_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            for config in collections.valid[:10]
+            #for config in collections.valid
+            for config in collections.valid[:1]
         ],
         batch_size=args.valid_batch_size,
         shuffle=False,
@@ -204,7 +204,7 @@ def main() -> None:
             dipole_weight=args.dipole_weight,
         )
     elif args.loss == "multipoles":
-        loss_fn = modules.MultipolesLoss()
+        loss_fn = modules.MultipolesLoss(highest_multipole_moment=args.highest_multipole_moment)
     else:
         loss_fn = modules.EnergyForcesLoss(
             energy_weight=args.energy_weight, forces_weight=args.forces_weight
@@ -467,6 +467,17 @@ def main() -> None:
     logging.info(f"Number of parameters: {tools.count_parameters(model)}")
     logging.info(f"Optimizer: {optimizer}")
 
+    print("What's my data?")
+    print("positions",train_loader.dataset[0]["positions"])
+    print("one hot",train_loader.dataset[0]["node_attrs"])
+    print("num_nodes",train_loader.dataset[0]["num_nodes"])
+    print("edge_index",train_loader.dataset[0]["edge_index"])
+    print("charges",train_loader.dataset[0]["charges"])
+    print("dipoles",train_loader.dataset[0]["dipoles"])
+    print("quadrupoles",train_loader.dataset[0]["quadrupoles"])
+    print("octupoles",train_loader.dataset[0]["octupoles"])
+
+
     tools.train(
         model=model,
         loss_fn=loss_fn,
@@ -499,9 +510,11 @@ def main() -> None:
 
     print("collections",len(collections.train),len(collections.valid),len(collections.tests))
 
+    #print(collections.train[:1])
+
     all_collections = [
-        ("train", collections.train[:10]),
-        ("valid", collections.valid[:10]),
+        ("train", collections.train[:1]),
+        ("valid", collections.valid[:1]),
     ] + collections.tests
 
     table = create_error_table(

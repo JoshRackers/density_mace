@@ -216,8 +216,6 @@ class AtomicData(torch_geometric.data.Data):
             else None
         )
 
-        #print("in from_config, energy", energy)
-
         return cls(
             edge_index=torch.tensor(edge_index, dtype=torch.long),
             positions=torch.tensor(config.positions, dtype=torch.get_default_dtype()),

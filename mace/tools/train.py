@@ -14,6 +14,7 @@ import torch
 from torch.optim.swa_utils import SWALR, AveragedModel
 from torch.utils.data import DataLoader
 from torch_ema import ExponentialMovingAverage
+from e3nn import io
 
 from . import torch_geometric
 from .checkpoint import CheckpointHandler, CheckpointState
@@ -237,10 +238,40 @@ def take_step(
         compute_virials=output_args["virials"],
         compute_stress=output_args["stress"],
     )
+
     #print("train, output",output["charges"])
     #print("train, batch ", batch["charges"])
     loss = loss_fn(pred=output, ref=batch)
-    print("loss",loss)
+    
+    torch.set_printoptions(precision=10)
+    print("loss",loss.data)
+    try:
+        print("energy, ref:", batch["energy"]," pred:", output["energy"])
+    except:
+        pass
+
+    try:
+        print(" ref charge",batch["charges"])
+        print("pred charge",output["charges"].data)
+    except:
+        pass
+
+    try:
+        print(" ref dipoles",batch["dipoles"])
+        print("pred dipoles",output["dipoles"].data)
+    except:
+        pass
+
+    # try:
+    #     print(" ref quadrupoles",batch["quadrupoles"])
+    #     print("pred quadrupoles",output["quadrupoles"].data)
+    # except:
+    #     pass
+
+    
+
+    #print(" ref charge",batch["charges"][0,:],"dipole",batch["dipoles"][0,:])
+    #print("pred charge",output["charges"][0,:].data,"dipole",output["dipoles"][0,:].data)
     #print(output["charges"].shape,batch["charges"].shape)
     #print(output["dipoles"].shape,batch["dipoles"].shape)
     loss.backward()
@@ -356,11 +387,21 @@ def evaluate(
             dipoles_list.append(batch.dipoles)
         if output.get("quadrupoles") is not None and batch.quadrupoles is not None:
             quadrupoles_computed = True
-            delta_quadrupoles_per_atom_list.append(batch.quadrupoles - output["quadrupoles"])
+            # switch to cartesian
+            cart = io.CartesianTensor("ij=ji")
+            zeros = torch.zeros(len(output["quadrupoles"]))
+            add_trace = torch.cat((zeros.unsqueeze(-1),output["quadrupoles"]),dim=-1)
+            quad_cart = cart.to_cartesian(add_trace)
+            delta_quadrupoles_per_atom_list.append(batch.quadrupoles - quad_cart)
             quadrupoles_list.append(batch.quadrupoles)
         if output.get("octupoles") is not None and batch.octupoles is not None:
             octupoles_computed = True
-            delta_octupoles_per_atom_list.append(batch.octupoles - output["octupoles"])
+            cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+            zeros = torch.zeros([len(output["octupoles"]),3])
+            add_trace = torch.cat((zeros,output["octupoles"]),dim=-1)
+            oct_cart = cart.to_cartesian(add_trace)
+
+            delta_octupoles_per_atom_list.append(batch.octupoles - oct_cart)
             octupoles_list.append(batch.octupoles)
         
 

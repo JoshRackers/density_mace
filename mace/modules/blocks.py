@@ -128,9 +128,10 @@ class NonLinearGenericReadoutBlock(torch.nn.Module):
         irreps_final: o3.Irreps,
         MLP_irreps: o3.Irreps,
         gate: Callable,
-        dipole_only: bool = False,
     ):
         super().__init__()
+        assert (len(MLP_irreps) >= len(irreps_final)), "To max l of MLP_irreps must be greater than or equal to irreps_out"
+
         self.hidden_irreps = MLP_irreps
         self.irreps_out = irreps_final
         irreps_scalars = o3.Irreps(

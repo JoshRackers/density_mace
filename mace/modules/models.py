@@ -79,6 +79,9 @@ class AtomicMultipolesMACE(torch.nn.Module):
         # Embedding
         node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
         node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
+        print("node_attr_irreps",node_attr_irreps)
+        print("node_feats_irreps",node_feats_irreps)
+
         self.node_embedding = LinearNodeEmbeddingBlock(
             irreps_in=node_attr_irreps, irreps_out=node_feats_irreps
         )
@@ -92,6 +95,7 @@ class AtomicMultipolesMACE(torch.nn.Module):
         sh_irreps = o3.Irreps.spherical_harmonics(max_ell)
         num_features = hidden_irreps.count(o3.Irrep(0, 1))
         interaction_irreps = (sh_irreps * num_features).sort()[0].simplify()
+        print('interaction_irreps',interaction_irreps)
         self.spherical_harmonics = o3.SphericalHarmonics(
             sh_irreps, normalize=True, normalization="component"
         )
@@ -128,27 +132,35 @@ class AtomicMultipolesMACE(torch.nn.Module):
         self.readouts.append(LinearGenericReadoutBlock(hidden_irreps, final_irreps))
 
         for i in range(num_interactions - 1):
+            # if this is the last interaction
             if i == num_interactions - 2:
                 assert (
-                    len(hidden_irreps) > 1
-                ), "To predict multipoles use at least l=1 hidden_irreps"
-                hidden_irreps_out = str(
-                    hidden_irreps[1]
-                )  # Select only l=1 vectors for last layer
+                    len(hidden_irreps) > self.highest_multipole_moment
+                ), "To predict multipoles use at least l=" + str(self.highest_multipole_moment) + " hidden_irreps"
+                #hidden_irreps_out = str(
+                #    hidden_irreps[:2]
+                #)  # Select only l=1 vectors for last layer
+                hidden_irreps_out = hidden_irreps
             else:
                 hidden_irreps_out = hidden_irreps
+            
+            print("hidden_irreps_out",hidden_irreps_out)
+
+            #hidden_irreps_out = hidden_irreps
             inter = interaction_cls(
                 node_attrs_irreps=node_attr_irreps,
                 node_feats_irreps=inter.irreps_out,
                 edge_attrs_irreps=sh_irreps,
                 edge_feats_irreps=edge_feats_irreps,
-                target_irreps=interaction_irreps,
+                #target_irreps=interaction_irreps,
+                target_irreps=hidden_irreps_out,
                 hidden_irreps=hidden_irreps_out,
                 avg_num_neighbors=avg_num_neighbors,
             )
             self.interactions.append(inter)
             prod = EquivariantProductBasisBlock(
-                node_feats_irreps=interaction_irreps,
+                #node_feats_irreps=interaction_irreps,
+                node_feats_irreps=hidden_irreps_out,
                 target_irreps=hidden_irreps_out,
                 correlation=correlation,
                 element_dependent=True,
@@ -199,7 +211,7 @@ class AtomicMultipolesMACE(torch.nn.Module):
         multipoles = []
         for interaction, product, readout in zip(
             self.interactions, self.products, self.readouts
-        ):
+            ):
             node_feats, sc = interaction(
                 node_attrs=data.node_attrs,
                 node_feats=node_feats,
@@ -213,44 +225,26 @@ class AtomicMultipolesMACE(torch.nn.Module):
             #node_dipoles = readout(node_feats).squeeze(-1)  # [n_nodes,3]
             #dipoles.append(node_dipoles)
             multipole_moments = readout(node_feats).squeeze(-1)
-            #print("model output moments",multipole_moments.shape)
             multipoles.append(multipole_moments)
 
         contributions_multipoles = torch.stack(multipoles, dim=-1)
         atomic_multipoles = torch.sum(contributions_multipoles, dim=-1)
 
+        charges = None
+        dipoles = None
+        quadrupoles = None
+        octupoles = None
+
         if self.highest_multipole_moment == 0:
             charges = atomic_multipoles[:].unsqueeze(-1)
-            output = {
-            "charges": charges,
-            }
         elif self.highest_multipole_moment >= 0:
             charges = atomic_multipoles[:,0].unsqueeze(-1)
-            output = {
-            "charges": charges,
-            }
         if self.highest_multipole_moment >= 1:
             dipoles = atomic_multipoles[:,1:4]
-            output = {
-            "charges": charges,
-            "dipoles": dipoles,
-            }
         if self.highest_multipole_moment >= 2:
-            quadrupoles = atomic_multipoles[:,5:10]
-            output = {
-            "charges": charges,
-            "dipoles": dipoles,
-            "quadrupoles": quadrupoles,
-            }
+            quadrupoles = atomic_multipoles[:,4:9]
         if self.highest_multipole_moment >= 3:
-            octupoles = atomic_multipoles[:,10:17]
-            output = {
-            "charges": charges,
-            "dipoles": dipoles,
-            "quadrupoles": quadrupoles,
-            "octupoles": octupoles,
-            }
-
+            octupoles = atomic_multipoles[:,9:]
 
         #### DON'T NEED TOTAL MOMENTS
         # Compute the dipoles
@@ -271,6 +265,13 @@ class AtomicMultipolesMACE(torch.nn.Module):
         #     num_graphs=data.num_graphs,
         # )  # [n_graphs,3]
         # total_dipole = total_dipole + baseline
+
+        output = {
+            "charges": charges,
+            "dipoles": dipoles,
+            "quadrupoles": quadrupoles,
+            "octupoles": octupoles,
+        }
 
 
         return output
@@ -637,7 +638,7 @@ class MACE(torch.nn.Module):
                 src=node_energies, index=data.batch, dim=-1, dim_size=data.num_graphs
             )  # [n_graphs,]
             energies.append(energy)
-
+        
         # Sum over energy contributions
         contributions = torch.stack(energies, dim=-1)
         total_energy = torch.sum(contributions, dim=-1)  # [n_graphs, ]

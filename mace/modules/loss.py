@@ -9,6 +9,8 @@ import torch
 from mace.tools import TensorDict
 from mace.tools.torch_geometric import Batch
 
+from e3nn import io
+
 
 def mean_squared_error_energy(ref: Batch, pred: TensorDict) -> torch.Tensor:
     # energy: [n_graphs, ]
@@ -78,7 +80,43 @@ def weighted_mean_squared_error_dipole(ref: Batch, pred: TensorDict) -> torch.Te
 
 
 def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> torch.Tensor:
-    return torch.mean(torch.square(ref[moment] - pred[moment])) * 10000  # []
+    multiplier = 1
+    ref_cart = ref[moment]
+    if moment == "charges":
+        pred_cart = pred[moment]
+        #multiplier = 0
+    else:
+        if moment == "dipoles":
+            cart = io.CartesianTensor("i")
+            pred_cart = cart.to_cartesian(pred[moment])
+            #multiplier = 0
+        elif moment == "quadrupoles":
+            cart = io.CartesianTensor("ij=ji")
+            # this definition still has a trace, which to_cartesian will expect
+            # so we have to add a zero to the front
+            zeros = torch.zeros(len(pred[moment]))
+            pred_trace = torch.cat((zeros.unsqueeze(-1),pred[moment]),dim=-1)
+            pred_cart = cart.to_cartesian(pred_trace)
+            multiplier = 1
+            # print("qudrupole loss")
+            # print("ref")
+            # print(ref_cart)
+            # print("pred")
+            # print(pred_cart)
+        elif moment == "octupoles":
+            #  see decomposition of rank-3 tensor here:
+            # https://math.stackexchange.com/questions/3585336/finding-the-irreducible-components-of-a-rank-3-tensor
+            cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+            zeros = torch.zeros([len(pred[moment]),3])
+            pred_trace = torch.cat((zeros,pred[moment]),dim=-1)
+            pred_cart = cart.to_cartesian(pred_trace)
+            print("octupole loss")
+            print("ref")
+            print(ref_cart)
+            print("pred")
+            print(pred_cart)
+    
+    return torch.mean(torch.square(ref_cart - pred_cart)) * 1000 * multiplier
 
 
 class EnergyForcesLoss(torch.nn.Module):
@@ -254,7 +292,7 @@ class WeightedEnergyForcesDipoleLoss(torch.nn.Module):
 
 
 class MultipolesLoss(torch.nn.Module):
-    def __init__(self, multipole_weight=1.0, highest_multipole_moment: int = 0) -> None:
+    def __init__(self, highest_multipole_moment: int, multipole_weight=1.0) -> None:
         super().__init__()
         self.register_buffer(
             "multipole_weight",

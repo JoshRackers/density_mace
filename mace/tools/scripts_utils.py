@@ -78,12 +78,14 @@ def get_dataset_from_spicehdf5(
         )
         train_configs = all_train_configs
     else:
-        logging.info(
-            "Using random %s%% of training set for validation", 100 * valid_fraction
-        )
-        train_configs, valid_configs = data.random_train_valid_split(
-            all_train_configs, valid_fraction, seed
-        )
+        train_configs = all_train_configs
+        valid_configs = all_train_configs
+        # logging.info(
+        #     "Using random %s%% of training set for validation", 100 * valid_fraction
+        # )
+        # train_configs, valid_configs = data.random_train_valid_split(
+        #     all_train_configs, valid_fraction, seed
+        # )
 
     test_configs = []
     if test_path is not None:
