@@ -188,6 +188,13 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default=False,
     )
     parser.add_argument(
+        "--spice_subset", 
+        help="Select which subset to use from SPICE dataset", 
+        type=str, 
+        default="SPICE DES370K Single Points Dataset v1.0"
+        #default="SPICE Dipeptides Single Points Dataset v1.2"
+    )
+    parser.add_argument(
         "--train_file", 
         help="Training set xyz file", 
         type=str, 

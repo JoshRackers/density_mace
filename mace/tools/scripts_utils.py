@@ -25,6 +25,7 @@ class SubsetCollection:
 def get_dataset_from_spicehdf5(
     train_path: str,
     valid_path: str,
+    subset_key: str,
     valid_fraction: float,
     config_type_weights: Dict,
     test_path: str = None,
@@ -39,10 +40,10 @@ def get_dataset_from_spicehdf5(
     quadrupoles_key: str = "mbis_quadrupoles",
     octupoles_key: str = "mbis_octupoles",
 ) -> Tuple[SubsetCollection, Optional[Dict[int, float]]]:
-    """Load training and test dataset from xyz file"""
+    """Load training and test dataset from hdf5 file"""
     atomic_energies_dict, all_train_configs = data.load_from_hdf5(
         file_path=train_path,
-        subset_key="SPICE Dipeptides Single Points Dataset v1.2",
+        subset_key=subset_key,
         config_type_weights=config_type_weights,
         energy_key=energy_key,
         forces_key=forces_key,

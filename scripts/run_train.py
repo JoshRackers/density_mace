@@ -50,6 +50,7 @@ def main() -> None:
         collections, atomic_energies_dict = get_dataset_from_spicehdf5(
             train_path=args.train_file,
             valid_path=args.valid_file,
+            subset_key=args.spice_subset,
             valid_fraction=args.valid_fraction,
             config_type_weights=config_type_weights,
             test_path=args.test_file,
