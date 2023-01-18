@@ -162,17 +162,17 @@ def train(
                 if highest_multipole_moment >= 1:
                     error_dipoles = eval_metrics["rmse_dipoles_per_atom"] * 1e3
                     logging.info(
-                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_dipoles_per_atom={error_dipoles:.2f} "
+                        f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_dipoles_per_atom={error_dipoles:.2f} "
                     )
                 if highest_multipole_moment >= 2:
                     error_quadrupoles = eval_metrics["rmse_quadrupoles_per_atom"] * 1e3
                     logging.info(
-                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_quadrupoles_per_atom={error_quadrupoles:.2f} "
+                        f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_quadrupoles_per_atom={error_quadrupoles:.2f} "
                     )
                 if highest_multipole_moment >= 3:
                     error_octupoles = eval_metrics["rmse_octupoles_per_atom"] * 1e3
                     logging.info(
-                        f"Epoch {epoch}: loss={valid_loss:.4f}, RMSE_octupoles_per_atom={error_octupoles:.2f} "
+                        f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_octupoles_per_atom={error_octupoles:.2f} "
                     )
             elif log_errors == "EnergyDipoleRMSE":
                 error_e = eval_metrics["rmse_e_per_atom"] * 1e3
@@ -244,7 +244,6 @@ def take_step(
     loss = loss_fn(pred=output, ref=batch)
     
     torch.set_printoptions(precision=10)
-    print("loss",loss.data)
     try:
         print("energy, ref:", batch["energy"]," pred:", output["energy"])
     except:
@@ -261,6 +260,8 @@ def take_step(
         print("pred dipoles",output["dipoles"].data)
     except:
         pass
+
+    print("loss",loss.data)
 
     # try:
     #     print(" ref quadrupoles",batch["quadrupoles"])

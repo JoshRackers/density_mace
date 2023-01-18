@@ -79,7 +79,7 @@ def weighted_mean_squared_error_dipole(ref: Batch, pred: TensorDict) -> torch.Te
     # return torch.mean(torch.square((torch.reshape(ref['dipole'], pred["dipole"].shape) - pred['dipole']) / num_atoms))  # []
 
 
-def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> torch.Tensor:
+def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str, cart = None, rtp = None) -> torch.Tensor:
     multiplier = 1
     ref_cart = ref[moment]
     if moment == "charges":
@@ -87,16 +87,17 @@ def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> t
         #multiplier = 0
     else:
         if moment == "dipoles":
-            cart = io.CartesianTensor("i")
-            pred_cart = cart.to_cartesian(pred[moment])
+            #cart = io.CartesianTensor("i")
+            #pred_cart = cart.to_cartesian(pred[moment])
+            pred_cart = pred[moment]
             #multiplier = 0
         elif moment == "quadrupoles":
-            cart = io.CartesianTensor("ij=ji")
+            #cart = io.CartesianTensor("ij=ji")
             # this definition still has a trace, which to_cartesian will expect
             # so we have to add a zero to the front
             zeros = torch.zeros(len(pred[moment]))
             pred_trace = torch.cat((zeros.unsqueeze(-1),pred[moment]),dim=-1)
-            pred_cart = cart.to_cartesian(pred_trace)
+            pred_cart = cart.to_cartesian(pred_trace, rtp=rtp)
             multiplier = 1
             # print("qudrupole loss")
             # print("ref")
@@ -106,10 +107,10 @@ def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str) -> t
         elif moment == "octupoles":
             #  see decomposition of rank-3 tensor here:
             # https://math.stackexchange.com/questions/3585336/finding-the-irreducible-components-of-a-rank-3-tensor
-            cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+            #cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
             zeros = torch.zeros([len(pred[moment]),3])
             pred_trace = torch.cat((zeros,pred[moment]),dim=-1)
-            pred_cart = cart.to_cartesian(pred_trace)
+            pred_cart = cart.to_cartesian(pred_trace, rtp=rtp)
             print("octupole loss")
             print("ref")
             print(ref_cart)
@@ -292,7 +293,7 @@ class WeightedEnergyForcesDipoleLoss(torch.nn.Module):
 
 
 class MultipolesLoss(torch.nn.Module):
-    def __init__(self, highest_multipole_moment: int, multipole_weight=1.0) -> None:
+    def __init__(self, device, highest_multipole_moment: int, multipole_weight=1.0) -> None:
         super().__init__()
         self.register_buffer(
             "multipole_weight",
@@ -302,6 +303,13 @@ class MultipolesLoss(torch.nn.Module):
             "highest_multipole_moment",
             torch.tensor(highest_multipole_moment, dtype=torch.get_default_dtype()),
         )
+        quad_cart = io.CartesianTensor("ij=ji")
+        self.quadrupole_cartesiantensor = quad_cart
+        self.quadrupole_rtp = quad_cart.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+        oct_cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+        self.octupole_cartesiantensor = oct_cart
+        self.octupole_rtp = oct_cart.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+
 
     def forward(self, ref: Batch, pred: TensorDict) -> torch.Tensor:
         if self.highest_multipole_moment >= 0:
@@ -309,9 +317,9 @@ class MultipolesLoss(torch.nn.Module):
         if self.highest_multipole_moment >= 1:
             error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="dipoles")
         if self.highest_multipole_moment >= 2:
-            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="quadrupoles")
+            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="quadrupoles", cart = self.quadrupole_cartesiantensor, rtp = self.quadrupole_rtp)
         if self.highest_multipole_moment >= 3:
-            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="octupoles")
+            error += self.multipole_weight * mean_squared_error_multipole(ref, pred, moment="octupoles", cart = self.octupole_cartesiantensor, rtp = self.octupole_rtp)
 
         return (error)
 

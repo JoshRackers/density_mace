@@ -205,7 +205,7 @@ def main() -> None:
             dipole_weight=args.dipole_weight,
         )
     elif args.loss == "multipoles":
-        loss_fn = modules.MultipolesLoss(highest_multipole_moment=args.highest_multipole_moment)
+        loss_fn = modules.MultipolesLoss(device=device, highest_multipole_moment=args.highest_multipole_moment)
     else:
         loss_fn = modules.EnergyForcesLoss(
             energy_weight=args.energy_weight, forces_weight=args.forces_weight
@@ -469,6 +469,7 @@ def main() -> None:
     logging.info(f"Optimizer: {optimizer}")
 
     print("What's my data?")
+    print("atomic numbers",train_loader.dataset[0]["atomic_numbers"])
     print("positions",train_loader.dataset[0]["positions"])
     print("one hot",train_loader.dataset[0]["node_attrs"])
     print("num_nodes",train_loader.dataset[0]["num_nodes"])

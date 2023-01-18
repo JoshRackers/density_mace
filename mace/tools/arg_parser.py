@@ -191,7 +191,8 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         "--spice_subset", 
         help="Select which subset to use from SPICE dataset", 
         type=str, 
-        default="SPICE DES370K Single Points Dataset v1.0"
+        default=None,
+        #default="SPICE DES370K Single Points Dataset v1.0"
         #default="SPICE Dipeptides Single Points Dataset v1.2"
     )
     parser.add_argument(

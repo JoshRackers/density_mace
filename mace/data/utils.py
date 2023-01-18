@@ -251,8 +251,8 @@ def load_from_hdf5(
     file_path: str,
     subset_key: str,
     config_type_weights: Dict,
-    energy_key: str = "energy",
-    forces_key: str = "forces",
+    energy_key: str = "dft_total_energy",
+    forces_key: str = "dft_total_gradient",
     stress_key: str = "stress",
     virials_key: str = "virials",
     dipole_key: str = "dipole",
@@ -263,8 +263,12 @@ def load_from_hdf5(
     extract_atomic_energies: bool = False,
 ) -> Tuple[Dict[int, float], Configurations]:
 
-    logging.warning("NOT USING MACE UNITS")
+    logging.info("Extracting atomic energies is currently not supported for SPICE")
+    atomic_energies_dict = {}
+    # FUTURE: insert atomic energies stuff
 
+    logging.warning("NOT USING MACE UNITS")
+    logging.info("SPICE dataset is all gas phase, not periodic")
     pbc = tuple([False,False,False])
     cell = np.array([[100,0,0],[0,100,0],[0,0,100]])
     config_type = "Default"
@@ -276,58 +280,48 @@ def load_from_hdf5(
 
     h5_file = h5py.File(file_path)
 
+    quad_carttensor = io.CartesianTensor("ij=ji")
+    oct_carttensor = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
     configs = []
     for name in h5_file:
         h5data = h5_file[name]
-        if np.array(h5data["subset"]).item() == subset_key.encode('ascii'):
-            if len(np.array(h5data["atomic_numbers"])) == 2:
+        #print(h5data)
+        if (subset_key == None) or (np.array(h5data["subset"]).item() == subset_key.encode('ascii')):
+            #if len(np.array(h5data["atomic_numbers"])) == 4:
+                #for idx in range(1):
                 for idx in range(len(h5data["conformations"])):
-                    # remove quadrupole trace
-                    traced_quadrupoles=np.array(h5data[quadrupoles_key][idx,:,:,:])
-                    quadrupoles_list = []
-                    for atom in traced_quadrupoles:
-                        x = io.CartesianTensor("ij=ji")
-                        quad_irrep = x.from_cartesian(torch.from_numpy(atom))
-                        quad_irrep[0] = 0.0
-                        quadrupoles_list.append(x.to_cartesian(quad_irrep).cpu().detach().numpy())
-                    traceless_quadrupoles=np.array(quadrupoles_list)
+                    #print(np.array(h5data["smiles"]))
+                    #print(np.array(h5data[charges_key][idx,:,:]))
+                    try:
+                        configs.append(Configuration(
+                            # replace these with general keys?
+                            atomic_numbers=np.array(h5data["atomic_numbers"]),
+                            positions=np.array(h5data["conformations"][idx,:,:]),
+                            energy=np.array(h5data[energy_key][idx]),
+                            forces=np.array(h5data[forces_key][idx,:,:]),
+                            #stress=stress,
+                            #virials=virials,
+                            #dipole=dipole,
+                            charges=np.array(h5data[charges_key][idx,:,:]),
+                            dipoles=np.array(h5data[dipoles_key][idx,:,:]),
+                            # assumes we've removed the trace
+                            quadrupoles=np.array(h5data[quadrupoles_key][idx,:,:,:]),
+                            # assumes we've removed the trace
+                            octupoles=np.array(h5data[octupoles_key][idx,:,:,:,:]),
 
-                    # remove octupole trace
-                    traced_octupoles = np.array(h5data[octupoles_key][idx,:,:,:,:])
-                    octupoles_list = []
-                    for atom in traced_octupoles:
-                        x = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
-                        oct_irrep = x.from_cartesian(torch.from_numpy(atom))
-                        oct_irrep[:3] = 0.0
-                        octupoles_list.append(x.to_cartesian(oct_irrep).cpu().detach().numpy())
-                    traceless_octupoles=np.array(octupoles_list)
-
-                    configs.append(Configuration(
-                        # replace these with general keys?
-                        atomic_numbers=np.array(h5data["atomic_numbers"]),
-                        positions=np.array(h5data["conformations"][idx,:,:]),
-                        energy=np.array(h5data["dft_total_energy"][idx]),
-                        forces=np.array(h5data["dft_total_gradient"][idx,:,:]),
-                        #stress=stress,
-                        #virials=virials,
-                        #dipole=dipole,
-                        charges=np.array(h5data[charges_key][idx,:,:]),
-                        dipoles=np.array(h5data[dipoles_key][idx,:,:]),
-                        # removed quadrupole trace above
-                        quadrupoles=traceless_quadrupoles,
-                        # removed octupole trace above
-                        octupoles=traceless_octupoles,
-
-                        weight=weight,
-                        energy_weight=energy_weight,
-                        forces_weight=forces_weight,
-                        stress_weight=stress_weight,
-                        virials_weight=virials_weight,
-                        config_type=config_type,
-                        pbc=pbc,
-                        cell=cell,
-                    ))
+                            weight=weight,
+                            energy_weight=energy_weight,
+                            forces_weight=forces_weight,
+                            stress_weight=stress_weight,
+                            virials_weight=virials_weight,
+                            config_type=config_type,
+                            pbc=pbc,
+                            cell=cell,
+                        ))
+                    except:
+                        print("could not add this configuration. likely missing mbis multipoles")
     
+    logging.info("Extracting atomic energies is currently not supported for SPICE")
     atomic_energies_dict = {}
     # FUTURE: insert atomic energies stuff
 

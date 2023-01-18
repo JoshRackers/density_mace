@@ -30,8 +30,8 @@ def get_dataset_from_spicehdf5(
     config_type_weights: Dict,
     test_path: str = None,
     seed: int = 1234,
-    energy_key: str = "energy",
-    forces_key: str = "forces",
+    energy_key: str = "dft_total_energy",
+    forces_key: str = "dft_total_gradient",
     stress_key: str = "stress",
     virials_key: str = "virials",
     dipole_key: str = "dipoles",
@@ -54,7 +54,7 @@ def get_dataset_from_spicehdf5(
         dipoles_key=dipoles_key,
         quadrupoles_key=quadrupoles_key,
         octupoles_key=octupoles_key,
-        extract_atomic_energies=True,
+        extract_atomic_energies=False,
     )
     logging.info(
         f"Loaded {len(all_train_configs)} training configurations from '{train_path}'"
@@ -62,6 +62,7 @@ def get_dataset_from_spicehdf5(
     if valid_path is not None:
         _, valid_configs = data.load_from_hdf5(
             file_path=valid_path,
+            subset_key=subset_key,
             config_type_weights=config_type_weights,
             energy_key=energy_key,
             forces_key=forces_key,
@@ -90,6 +91,7 @@ def get_dataset_from_spicehdf5(
     if test_path is not None:
         _, all_test_configs = data.load_from_hdf5(
             file_path=test_path,
+            subset_key=subset_key,
             config_type_weights=config_type_weights,
             energy_key=energy_key,
             forces_key=forces_key,
