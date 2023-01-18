@@ -16,6 +16,8 @@ from torch.utils.data import DataLoader
 from torch_ema import ExponentialMovingAverage
 from e3nn import io
 
+import wandb
+
 from . import torch_geometric
 from .checkpoint import CheckpointHandler, CheckpointState
 from .torch_tools import tensor_dict_to_device, to_numpy
@@ -58,6 +60,8 @@ def train(
     max_grad_norm: Optional[float] = 10.0,
     highest_multipole_moment: int = None,
 ):
+    wandb.watch(model)
+
     lowest_loss = np.inf
     patience_counter = 0
     swa_start = True
@@ -67,8 +71,9 @@ def train(
     logging.info("Started training")
     for epoch in range(start_epoch, max_num_epochs):
         # Train
+        cumulative_loss = 0.0
         for batch in train_loader:
-            _, opt_metrics = take_step(
+            step_loss, opt_metrics = take_step(
                 model=model,
                 loss_fn=loss_fn,
                 batch=batch,
@@ -81,6 +86,11 @@ def train(
             opt_metrics["mode"] = "opt"
             opt_metrics["epoch"] = epoch
             logger.log(opt_metrics)
+
+            cumulative_loss += step_loss.detach()
+
+        average_loss = cumulative_loss/len(train_loader) 
+        wandb.log({"epoch": epoch, "Train Loss": average_loss})
 
         # Validate
         if epoch % eval_interval == 0:
@@ -202,6 +212,8 @@ def train(
                         state=CheckpointState(model, optimizer, lr_scheduler),
                         epochs=epoch,
                     )
+            
+            wandb.log(eval_metrics)
 
         # LR scheduler and SWA update
         if swa is None or epoch < swa.start:

@@ -20,8 +20,12 @@ from mace import data, modules, tools
 from mace.tools import torch_geometric
 from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, get_dataset_from_spicehdf5
 
+import wandb
+
 
 def main() -> None:
+    wandb.init(project="densityMACE")
+
     args = tools.build_default_arg_parser().parse_args()
     tag = tools.get_tag(name=args.name, seed=args.seed)
 
@@ -333,8 +337,7 @@ def main() -> None:
             MLP_irreps=o3.Irreps(args.MLP_irreps),
         )
     elif args.model == "AtomicMultipolesMACE":
-        model = modules.AtomicMultipolesMACE(
-            **model_config,
+        specific_config = dict(
             highest_multipole_moment=args.highest_multipole_moment,
             correlation=args.correlation,
             gate=modules.gate_dict[args.gate],
@@ -342,6 +345,20 @@ def main() -> None:
                 "RealAgnosticInteractionBlock"
             ],
             MLP_irreps=o3.Irreps(args.MLP_irreps),
+        )
+        whole_model_config = {**model_config, **specific_config}
+        wandb.config = whole_model_config
+        model = modules.AtomicMultipolesMACE(
+            **whole_model_config,
+            # **model_config,
+            # **specific_config,
+            # highest_multipole_moment=args.highest_multipole_moment,
+            # correlation=args.correlation,
+            # gate=modules.gate_dict[args.gate],
+            # interaction_cls_first=modules.interaction_classes[
+            #     "RealAgnosticInteractionBlock"
+            # ],
+            # MLP_irreps=o3.Irreps(args.MLP_irreps),
         )
     else:
         raise RuntimeError(f"Unknown model: '{args.model}'")
