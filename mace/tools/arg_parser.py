@@ -14,6 +14,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     # Name and seed
     parser.add_argument("--name", help="experiment name", required=True)
     parser.add_argument("--seed", help="random seed", type=int, default=123)
+    parser.add_argument("--wandb_project", help="wandb project for this run. if this is left unset, wandb will not be used", type=str, default=None)
 
     # Directories
     parser.add_argument(

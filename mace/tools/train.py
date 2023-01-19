@@ -51,6 +51,7 @@ def train(
     patience: int,
     checkpoint_handler: CheckpointHandler,
     logger: MetricsLogger,
+    use_wandb: bool,
     eval_interval: int,
     output_args: Dict[str, bool],
     device: torch.device,
@@ -60,7 +61,9 @@ def train(
     max_grad_norm: Optional[float] = 10.0,
     highest_multipole_moment: int = None,
 ):
-    wandb.watch(model)
+    
+    if use_wandb:
+        wandb.watch(model)
 
     lowest_loss = np.inf
     patience_counter = 0
@@ -90,7 +93,8 @@ def train(
             cumulative_loss += step_loss.detach()
 
         average_loss = cumulative_loss/len(train_loader) 
-        wandb.log({"epoch": epoch, "Train Loss": average_loss})
+        if use_wandb:
+            wandb.log({"epoch": epoch, "Train Loss": average_loss})
 
         # Validate
         if epoch % eval_interval == 0:
@@ -165,22 +169,22 @@ def train(
                 )
             elif log_errors == "MultipolesRMSE":
                 if highest_multipole_moment >= 0:
-                    error_charges = eval_metrics["rmse_charges_per_atom"] * 1e3
+                    error_charges = eval_metrics["rmse_charges_per_atom"]
                     logging.info(
                         f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_charges_per_atom={error_charges:.2f} "
                     )
                 if highest_multipole_moment >= 1:
-                    error_dipoles = eval_metrics["rmse_dipoles_per_atom"] * 1e3
+                    error_dipoles = eval_metrics["rmse_dipoles_per_atom"]
                     logging.info(
                         f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_dipoles_per_atom={error_dipoles:.2f} "
                     )
                 if highest_multipole_moment >= 2:
-                    error_quadrupoles = eval_metrics["rmse_quadrupoles_per_atom"] * 1e3
+                    error_quadrupoles = eval_metrics["rmse_quadrupoles_per_atom"]
                     logging.info(
                         f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_quadrupoles_per_atom={error_quadrupoles:.2f} "
                     )
                 if highest_multipole_moment >= 3:
-                    error_octupoles = eval_metrics["rmse_octupoles_per_atom"] * 1e3
+                    error_octupoles = eval_metrics["rmse_octupoles_per_atom"]
                     logging.info(
                         f"Epoch {epoch}: validloss={valid_loss:.4f}, RMSE_octupoles_per_atom={error_octupoles:.2f} "
                     )
@@ -213,7 +217,8 @@ def train(
                         epochs=epoch,
                     )
             
-            wandb.log(eval_metrics)
+            if use_wandb:
+                wandb.log(eval_metrics)
 
         # LR scheduler and SWA update
         if swa is None or epoch < swa.start:
@@ -343,6 +348,13 @@ def evaluate(
     batch = None  # for pylint
 
     start_time = time.time()
+
+    quadrupole_cartesiantensor = io.CartesianTensor("ij=ji")
+    quadrupole_rtp = quadrupole_cartesiantensor.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+    octupole_cartesiantensor = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+    octupole_rtp = octupole_cartesiantensor.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+
+
     for batch in data_loader:
         batch = batch.to(device)
         output = model(
@@ -401,18 +413,20 @@ def evaluate(
         if output.get("quadrupoles") is not None and batch.quadrupoles is not None:
             quadrupoles_computed = True
             # switch to cartesian
-            cart = io.CartesianTensor("ij=ji")
+            #cart = io.CartesianTensor("ij=ji")
             zeros = torch.zeros(len(output["quadrupoles"]))
             add_trace = torch.cat((zeros.unsqueeze(-1),output["quadrupoles"]),dim=-1)
-            quad_cart = cart.to_cartesian(add_trace)
+            #quad_cart = cart.to_cartesian(add_trace)
+            quad_cart = quadrupole_cartesiantensor.to_cartesian(add_trace, rtp=quadrupole_rtp)
             delta_quadrupoles_per_atom_list.append(batch.quadrupoles - quad_cart)
             quadrupoles_list.append(batch.quadrupoles)
         if output.get("octupoles") is not None and batch.octupoles is not None:
             octupoles_computed = True
-            cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+            #cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
             zeros = torch.zeros([len(output["octupoles"]),3])
             add_trace = torch.cat((zeros,output["octupoles"]),dim=-1)
-            oct_cart = cart.to_cartesian(add_trace)
+            #oct_cart = cart.to_cartesian(add_trace)
+            oct_cart = octupole_cartesiantensor.to_cartesian(add_trace, rtp=octupole_rtp)
 
             delta_octupoles_per_atom_list.append(batch.octupoles - oct_cart)
             octupoles_list.append(batch.octupoles)

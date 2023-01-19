@@ -24,10 +24,14 @@ import wandb
 
 
 def main() -> None:
-    wandb.init(project="densityMACE")
-
     args = tools.build_default_arg_parser().parse_args()
     tag = tools.get_tag(name=args.name, seed=args.seed)
+
+    if args.wandb_project != None:
+        use_wandb = True
+        wandb.init(project=args.wandb_project)
+    else:
+        use_wandb = False
 
     # Setup
     tools.set_seeds(args.seed)
@@ -517,6 +521,7 @@ def main() -> None:
         max_grad_norm=args.clip_grad,
         log_errors=args.error_table,
         highest_multipole_moment=args.highest_multipole_moment,
+        use_wandb = use_wandb,
     )
 
     epoch = checkpoint_handler.load_latest(
