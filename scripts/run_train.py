@@ -489,16 +489,16 @@ def main() -> None:
     logging.info(f"Number of parameters: {tools.count_parameters(model)}")
     logging.info(f"Optimizer: {optimizer}")
 
-    print("What's my data?")
-    print("atomic numbers",train_loader.dataset[0]["atomic_numbers"])
-    print("positions",train_loader.dataset[0]["positions"])
-    print("one hot",train_loader.dataset[0]["node_attrs"])
-    print("num_nodes",train_loader.dataset[0]["num_nodes"])
-    print("edge_index",train_loader.dataset[0]["edge_index"])
-    print("charges",train_loader.dataset[0]["charges"])
-    print("dipoles",train_loader.dataset[0]["dipoles"])
-    print("quadrupoles",train_loader.dataset[0]["quadrupoles"])
-    print("octupoles",train_loader.dataset[0]["octupoles"])
+    # print("What's my data?")
+    # print("atomic numbers",train_loader.dataset[0]["atomic_numbers"])
+    # print("positions",train_loader.dataset[0]["positions"])
+    # print("one hot",train_loader.dataset[0]["node_attrs"])
+    # print("num_nodes",train_loader.dataset[0]["num_nodes"])
+    # print("edge_index",train_loader.dataset[0]["edge_index"])
+    # print("charges",train_loader.dataset[0]["charges"])
+    # print("dipoles",train_loader.dataset[0]["dipoles"])
+    # print("quadrupoles",train_loader.dataset[0]["quadrupoles"])
+    # print("octupoles",train_loader.dataset[0]["octupoles"])
 
 
     tools.train(
@@ -532,15 +532,15 @@ def main() -> None:
     # Evaluation on test datasets
     logging.info("Computing metrics for training, validation, and test sets")
 
-    print("collections",len(collections.train),len(collections.valid),len(collections.tests))
+    #print("collections",len(collections.train),len(collections.valid),len(collections.tests))
 
     #print(collections.train[:1])
 
     all_collections = [
-        #("train", collections.train[:1]),
-        #("valid", collections.valid[:1]),
-        ("train", collections.train),
-        ("valid", collections.valid),
+        ("train", collections.train[:1]),
+        ("valid", collections.valid[:1]),
+        #("train", collections.train),
+        #("valid", collections.valid),
     ] + collections.tests
 
     table = create_error_table(

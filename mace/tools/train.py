@@ -260,25 +260,25 @@ def take_step(
     #print("train, batch ", batch["charges"])
     loss = loss_fn(pred=output, ref=batch)
     
-    torch.set_printoptions(precision=10)
-    try:
-        print("energy, ref:", batch["energy"]," pred:", output["energy"])
-    except:
-        pass
+    # torch.set_printoptions(precision=10)
+    # try:
+    #     print("energy, ref:", batch["energy"]," pred:", output["energy"])
+    # except:
+    #     pass
 
-    try:
-        print(" ref charge",batch["charges"])
-        print("pred charge",output["charges"].data)
-    except:
-        pass
+    # try:
+    #     print(" ref charge",batch["charges"])
+    #     print("pred charge",output["charges"].data)
+    # except:
+    #     pass
 
-    try:
-        print(" ref dipoles",batch["dipoles"])
-        print("pred dipoles",output["dipoles"].data)
-    except:
-        pass
+    # try:
+    #     print(" ref dipoles",batch["dipoles"])
+    #     print("pred dipoles",output["dipoles"].data)
+    # except:
+    #     pass
 
-    print("loss",loss.data)
+    # print("loss",loss.data)
 
     # try:
     #     print(" ref quadrupoles",batch["quadrupoles"])

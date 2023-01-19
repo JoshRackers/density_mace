@@ -79,8 +79,8 @@ class AtomicMultipolesMACE(torch.nn.Module):
         # Embedding
         node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
         node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
-        print("node_attr_irreps",node_attr_irreps)
-        print("node_feats_irreps",node_feats_irreps)
+        # print("node_attr_irreps",node_attr_irreps)
+        # print("node_feats_irreps",node_feats_irreps)
 
         self.node_embedding = LinearNodeEmbeddingBlock(
             irreps_in=node_attr_irreps, irreps_out=node_feats_irreps
@@ -95,7 +95,7 @@ class AtomicMultipolesMACE(torch.nn.Module):
         sh_irreps = o3.Irreps.spherical_harmonics(max_ell)
         num_features = hidden_irreps.count(o3.Irrep(0, 1))
         interaction_irreps = (sh_irreps * num_features).sort()[0].simplify()
-        print('interaction_irreps',interaction_irreps)
+        # print('interaction_irreps',interaction_irreps)
         self.spherical_harmonics = o3.SphericalHarmonics(
             sh_irreps, normalize=True, normalization="component"
         )
@@ -144,7 +144,7 @@ class AtomicMultipolesMACE(torch.nn.Module):
             else:
                 hidden_irreps_out = hidden_irreps
             
-            print("hidden_irreps_out",hidden_irreps_out)
+            # print("hidden_irreps_out",hidden_irreps_out)
 
             #hidden_irreps_out = hidden_irreps
             inter = interaction_cls(

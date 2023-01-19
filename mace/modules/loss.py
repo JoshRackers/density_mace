@@ -111,11 +111,11 @@ def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str, cart
             zeros = torch.zeros([len(pred[moment]),3])
             pred_trace = torch.cat((zeros,pred[moment]),dim=-1)
             pred_cart = cart.to_cartesian(pred_trace, rtp=rtp)
-            print("octupole loss")
-            print("ref")
-            print(ref_cart)
-            print("pred")
-            print(pred_cart)
+            # print("octupole loss")
+            # print("ref")
+            # print(ref_cart)
+            # print("pred")
+            # print(pred_cart)
     
     return torch.mean(torch.square(ref_cart - pred_cart)) * 1000 * multiplier
 
