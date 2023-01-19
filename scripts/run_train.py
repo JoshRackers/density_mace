@@ -163,8 +163,8 @@ def main() -> None:
     train_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            #for config in collections.train
-            for config in collections.train[:1]
+            for config in collections.train
+            #for config in collections.train[:1]
         ],
         batch_size=args.batch_size,
         shuffle=True,
@@ -173,8 +173,8 @@ def main() -> None:
     valid_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
-            #for config in collections.valid
-            for config in collections.valid[:1]
+            for config in collections.valid
+            #for config in collections.valid[:1]
         ],
         batch_size=args.valid_batch_size,
         shuffle=False,
@@ -537,8 +537,10 @@ def main() -> None:
     #print(collections.train[:1])
 
     all_collections = [
-        ("train", collections.train[:1]),
-        ("valid", collections.valid[:1]),
+        #("train", collections.train[:1]),
+        #("valid", collections.valid[:1]),
+        ("train", collections.train),
+        ("valid", collections.valid),
     ] + collections.tests
 
     table = create_error_table(
