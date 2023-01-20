@@ -217,6 +217,20 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         required=False,
     )
     parser.add_argument(
+        "--num_train_samples",
+        help="set specific number of training samples",
+        type=int,
+        default=None,
+        required=False,
+    )
+    parser.add_argument(
+        "--num_valid_samples",
+        help="set specific number of validation samples",
+        type=int,
+        default=None,
+        required=False,
+    )
+    parser.add_argument(
         "--test_file", help="Test set xyz file", type=str,
     )
     parser.add_argument(

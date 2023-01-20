@@ -89,6 +89,11 @@ def main() -> None:
             charges_key=args.charges_key,
         )
     
+    if args.num_train_samples != None:
+        del collections.train[args.num_train_samples:]
+    if args.num_valid_samples != None:
+        del collections.valid[args.num_valid_samples:]
+    
     logging.info(
         f"Total number of configurations: train={len(collections.train)}, valid={len(collections.valid)}, "
         f"tests=[{', '.join([name + ': ' + str(len(test_configs)) for name, test_configs in collections.tests])}]"
@@ -161,6 +166,7 @@ def main() -> None:
         logging.info(f"Atomic energies: {atomic_energies.tolist()}")
 
     logging.info("Building train_loader")
+    
     train_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
