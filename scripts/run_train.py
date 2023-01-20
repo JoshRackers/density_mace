@@ -160,6 +160,7 @@ def main() -> None:
         )
         logging.info(f"Atomic energies: {atomic_energies.tolist()}")
 
+    logging.info("Building train_loader")
     train_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
@@ -170,6 +171,8 @@ def main() -> None:
         shuffle=True,
         drop_last=True,
     )
+
+    logging.info("Building valid_loader")
     valid_loader = torch_geometric.dataloader.DataLoader(
         dataset=[
             data.AtomicData.from_config(config, z_table=z_table, cutoff=args.r_max)
@@ -537,10 +540,10 @@ def main() -> None:
     #print(collections.train[:1])
 
     all_collections = [
-        ("train", collections.train[:1]),
-        ("valid", collections.valid[:1]),
-        #("train", collections.train),
-        #("valid", collections.valid),
+        #("train", collections.train[:1]),
+        #("valid", collections.valid[:1]),
+        ("train", collections.train),
+        ("valid", collections.valid),
     ] + collections.tests
 
     table = create_error_table(
