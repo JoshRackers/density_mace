@@ -49,13 +49,16 @@ def to_numpy(t: torch.Tensor) -> np.ndarray:
 
 
 def init_device(device_str: str) -> torch.device:
-    if device_str == "cuda":
+    #if device_str == "cuda":
+    if "cuda" in device_str:
         assert torch.cuda.is_available(), "No CUDA device available!"
+        torch.cuda.set_device(device_str)
         logging.info(
             f"CUDA version: {torch.version.cuda}, CUDA device: {torch.cuda.current_device()}"
         )
         torch.cuda.init()
-        return torch.device("cuda")
+        #return torch.device("cuda")
+        return torch.device(device_str)
     elif device_str == "mps":
         assert torch.backends.mps.is_available(), "No MPS backend is available!"
         logging.info(f"Using MPS GPU acceleration")

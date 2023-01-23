@@ -364,8 +364,8 @@ def evaluate(
             compute_virials=output_args["virials"],
             compute_stress=output_args["stress"],
         )
-        batch = batch.cpu()
-        output = tensor_dict_to_device(output, device=torch.device("cpu"))
+        #batch = batch.cpu()
+        #output = tensor_dict_to_device(output, device=torch.device("cpu"))
 
         loss = loss_fn(pred=output, ref=batch)
         total_loss += to_numpy(loss).item()
@@ -414,7 +414,7 @@ def evaluate(
             quadrupoles_computed = True
             # switch to cartesian
             #cart = io.CartesianTensor("ij=ji")
-            zeros = torch.zeros(len(output["quadrupoles"]))
+            zeros = torch.zeros(len(output["quadrupoles"]), device=device)
             add_trace = torch.cat((zeros.unsqueeze(-1),output["quadrupoles"]),dim=-1)
             #quad_cart = cart.to_cartesian(add_trace)
             quad_cart = quadrupole_cartesiantensor.to_cartesian(add_trace, rtp=quadrupole_rtp)
@@ -423,7 +423,7 @@ def evaluate(
         if output.get("octupoles") is not None and batch.octupoles is not None:
             octupoles_computed = True
             #cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
-            zeros = torch.zeros([len(output["octupoles"]),3])
+            zeros = torch.zeros([len(output["octupoles"]),3], device=device)
             add_trace = torch.cat((zeros,output["octupoles"]),dim=-1)
             #oct_cart = cart.to_cartesian(add_trace)
             oct_cart = octupole_cartesiantensor.to_cartesian(add_trace, rtp=octupole_rtp)
