@@ -103,7 +103,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--interaction",
-        help="name of interaction block",
+        help="name of block",
         type=str,
         default="RealAgnosticResidualInteractionBlock",
         choices=[

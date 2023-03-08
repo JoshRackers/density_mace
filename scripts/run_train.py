@@ -22,7 +22,6 @@ from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, g
 
 import wandb
 
-
 def main() -> None:
     args = tools.build_default_arg_parser().parse_args()
     tag = tools.get_tag(name=args.name, seed=args.seed)

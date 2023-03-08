@@ -19,6 +19,7 @@ from mace.tools import (
 from .neighborhood import get_neighborhood
 from .utils import Configuration
 
+import logging
 
 class AtomicData(torch_geometric.data.Data):
     num_graphs: torch.Tensor
@@ -121,9 +122,13 @@ class AtomicData(torch_geometric.data.Data):
         cls, config: Configuration, z_table: AtomicNumberTable, cutoff: float
     ) -> "AtomicData":
 
+        #logging.info("getting neighborhood")
+
         edge_index, shifts, unit_shifts = get_neighborhood(
             positions=config.positions, cutoff=cutoff, pbc=config.pbc, cell=config.cell
         )
+
+        #logging.info("   got neighborhood")
 
         indices = atomic_numbers_to_indices(config.atomic_numbers, z_table=z_table)
 
