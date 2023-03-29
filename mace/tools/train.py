@@ -75,7 +75,8 @@ def train(
     for epoch in range(start_epoch, max_num_epochs):
         # Train
         cumulative_loss = 0.0
-        for batch in train_loader:
+        for i, batch in enumerate(train_loader):
+            logging.info(f"Step {i}")
             step_loss, opt_metrics = take_step(
                 model=model,
                 loss_fn=loss_fn,
@@ -93,11 +94,13 @@ def train(
             cumulative_loss += step_loss.detach()
 
         average_loss = cumulative_loss/len(train_loader) 
+        logging.info(f"Step={i} Loss={average_loss:.4f}")
         if use_wandb:
             wandb.log({"epoch": epoch, "Train Loss": average_loss})
 
         # Validate
         if epoch % eval_interval == 0:
+            logging.info("Starting eval")
             if ema is not None:
                 with ema.average_parameters():
                     valid_loss, eval_metrics = evaluate(
