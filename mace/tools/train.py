@@ -76,7 +76,7 @@ def train(
         # Train
         cumulative_loss = 0.0
         for i, batch in enumerate(train_loader):
-            logging.info(f"Step {i}")
+            #logging.info(f"Step {i}")
             step_loss, opt_metrics = take_step(
                 model=model,
                 loss_fn=loss_fn,
@@ -94,7 +94,7 @@ def train(
             cumulative_loss += step_loss.detach()
 
         average_loss = cumulative_loss/len(train_loader) 
-        logging.info(f"Step={i} Loss={average_loss:.4f}")
+        logging.info(f"Epoch={epoch} Train Loss={average_loss:.4f}")
         if use_wandb:
             wandb.log({"epoch": epoch, "Train Loss": average_loss})
 
@@ -357,152 +357,152 @@ def evaluate(
     octupole_cartesiantensor = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
     octupole_rtp = octupole_cartesiantensor.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
 
-
-    for batch in data_loader:
-        batch = batch.to(device)
-        output = model(
-            batch,
-            training=False,
-            compute_force=output_args["forces"],
-            compute_virials=output_args["virials"],
-            compute_stress=output_args["stress"],
-        )
-        #batch = batch.cpu()
-        #output = tensor_dict_to_device(output, device=torch.device("cpu"))
-
-        loss = loss_fn(pred=output, ref=batch)
-        total_loss += to_numpy(loss).item()
-
-        if output.get("energy") is not None and batch.energy is not None:
-            E_computed = True
-            delta_es_list.append(batch.energy - output["energy"])
-            delta_es_per_atom_list.append(
-                (batch.energy - output["energy"]) / (batch.ptr[1:] - batch.ptr[:-1])
+    with torch.no_grad():
+        for batch in data_loader:
+            batch = batch.to(device)
+            output = model(
+                batch,
+                training=False,
+                compute_force=output_args["forces"],
+                compute_virials=output_args["virials"],
+                compute_stress=output_args["stress"],
             )
-        if output.get("forces") is not None and batch.forces is not None:
-            Fs_computed = True
-            delta_fs_list.append(batch.forces - output["forces"])
-            fs_list.append(batch.forces)
-        if output.get("stress") is not None and batch.stress is not None:
-            stress_computed = True
-            delta_stress_list.append(batch.stress - output["stress"])
-            delta_stress_per_atom_list.append(
-                (batch.stress - output["stress"])
-                / (batch.ptr[1:] - batch.ptr[:-1]).view(-1, 1, 1)
-            )
-        if output.get("virials") is not None and batch.virials is not None:
-            virials_computed = True
-            delta_virials_list.append(batch.virials - output["virials"])
-            delta_virials_per_atom_list.append(
-                (batch.virials - output["virials"])
-                / (batch.ptr[1:] - batch.ptr[:-1]).view(-1, 1, 1)
-            )
-        if output.get("dipole") is not None and batch.dipole is not None:
-            Mus_computed = True
-            delta_mus_list.append(batch.dipole - output["dipole"])
-            delta_mus_per_atom_list.append(
-                (batch.dipole - output["dipole"])
-                / (batch.ptr[1:] - batch.ptr[:-1]).unsqueeze(-1)
-            )
-            mus_list.append(batch.dipole)
-        if output.get("charges") is not None and batch.charges is not None:
-            charges_computed = True
-            delta_charges_per_atom_list.append(batch.charges - output["charges"])
-            charges_list.append(batch.charges)
-        if output.get("dipoles") is not None and batch.dipoles is not None:
-            dipoles_computed = True
-            delta_dipoles_per_atom_list.append(batch.dipoles - output["dipoles"])
-            dipoles_list.append(batch.dipoles)
-        if output.get("quadrupoles") is not None and batch.quadrupoles is not None:
-            quadrupoles_computed = True
-            # switch to cartesian
-            #cart = io.CartesianTensor("ij=ji")
-            zeros = torch.zeros(len(output["quadrupoles"]), device=device)
-            add_trace = torch.cat((zeros.unsqueeze(-1),output["quadrupoles"]),dim=-1)
-            #quad_cart = cart.to_cartesian(add_trace)
-            quad_cart = quadrupole_cartesiantensor.to_cartesian(add_trace, rtp=quadrupole_rtp)
-            delta_quadrupoles_per_atom_list.append(batch.quadrupoles - quad_cart)
-            quadrupoles_list.append(batch.quadrupoles)
-        if output.get("octupoles") is not None and batch.octupoles is not None:
-            octupoles_computed = True
-            #cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
-            zeros = torch.zeros([len(output["octupoles"]),3], device=device)
-            add_trace = torch.cat((zeros,output["octupoles"]),dim=-1)
-            #oct_cart = cart.to_cartesian(add_trace)
-            oct_cart = octupole_cartesiantensor.to_cartesian(add_trace, rtp=octupole_rtp)
+            #batch = batch.cpu()
+            #output = tensor_dict_to_device(output, device=torch.device("cpu"))
 
-            delta_octupoles_per_atom_list.append(batch.octupoles - oct_cart)
-            octupoles_list.append(batch.octupoles)
-        
+            loss = loss_fn(pred=output, ref=batch)
+            total_loss += to_numpy(loss).item()
 
-    avg_loss = total_loss / len(data_loader)
+            if output.get("energy") is not None and batch.energy is not None:
+                E_computed = True
+                delta_es_list.append(batch.energy - output["energy"])
+                delta_es_per_atom_list.append(
+                    (batch.energy - output["energy"]) / (batch.ptr[1:] - batch.ptr[:-1])
+                )
+            if output.get("forces") is not None and batch.forces is not None:
+                Fs_computed = True
+                delta_fs_list.append(batch.forces - output["forces"])
+                fs_list.append(batch.forces)
+            if output.get("stress") is not None and batch.stress is not None:
+                stress_computed = True
+                delta_stress_list.append(batch.stress - output["stress"])
+                delta_stress_per_atom_list.append(
+                    (batch.stress - output["stress"])
+                    / (batch.ptr[1:] - batch.ptr[:-1]).view(-1, 1, 1)
+                )
+            if output.get("virials") is not None and batch.virials is not None:
+                virials_computed = True
+                delta_virials_list.append(batch.virials - output["virials"])
+                delta_virials_per_atom_list.append(
+                    (batch.virials - output["virials"])
+                    / (batch.ptr[1:] - batch.ptr[:-1]).view(-1, 1, 1)
+                )
+            if output.get("dipole") is not None and batch.dipole is not None:
+                Mus_computed = True
+                delta_mus_list.append(batch.dipole - output["dipole"])
+                delta_mus_per_atom_list.append(
+                    (batch.dipole - output["dipole"])
+                    / (batch.ptr[1:] - batch.ptr[:-1]).unsqueeze(-1)
+                )
+                mus_list.append(batch.dipole)
+            if output.get("charges") is not None and batch.charges is not None:
+                charges_computed = True
+                delta_charges_per_atom_list.append(batch.charges - output["charges"])
+                charges_list.append(batch.charges)
+            if output.get("dipoles") is not None and batch.dipoles is not None:
+                dipoles_computed = True
+                delta_dipoles_per_atom_list.append(batch.dipoles - output["dipoles"])
+                dipoles_list.append(batch.dipoles)
+            if output.get("quadrupoles") is not None and batch.quadrupoles is not None:
+                quadrupoles_computed = True
+                # switch to cartesian
+                #cart = io.CartesianTensor("ij=ji")
+                zeros = torch.zeros(len(output["quadrupoles"]), device=device)
+                add_trace = torch.cat((zeros.unsqueeze(-1),output["quadrupoles"]),dim=-1)
+                #quad_cart = cart.to_cartesian(add_trace)
+                quad_cart = quadrupole_cartesiantensor.to_cartesian(add_trace, rtp=quadrupole_rtp)
+                delta_quadrupoles_per_atom_list.append(batch.quadrupoles - quad_cart)
+                quadrupoles_list.append(batch.quadrupoles)
+            if output.get("octupoles") is not None and batch.octupoles is not None:
+                octupoles_computed = True
+                #cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+                zeros = torch.zeros([len(output["octupoles"]),3], device=device)
+                add_trace = torch.cat((zeros,output["octupoles"]),dim=-1)
+                #oct_cart = cart.to_cartesian(add_trace)
+                oct_cart = octupole_cartesiantensor.to_cartesian(add_trace, rtp=octupole_rtp)
 
-    aux = {
-        "loss": avg_loss,
-    }
+                delta_octupoles_per_atom_list.append(batch.octupoles - oct_cart)
+                octupoles_list.append(batch.octupoles)
+            
 
-    if E_computed:
-        delta_es = to_numpy(torch.cat(delta_es_list, dim=0))
-        delta_es_per_atom = to_numpy(torch.cat(delta_es_per_atom_list, dim=0))
-        aux["mae_e"] = compute_mae(delta_es)
-        aux["mae_e_per_atom"] = compute_mae(delta_es_per_atom)
-        aux["rmse_e"] = compute_rmse(delta_es)
-        aux["rmse_e_per_atom"] = compute_rmse(delta_es_per_atom)
-        aux["q95_e"] = compute_q95(delta_es)
-    if Fs_computed:
-        delta_fs = to_numpy(torch.cat(delta_fs_list, dim=0))
-        fs = to_numpy(torch.cat(fs_list, dim=0))
-        aux["mae_f"] = compute_mae(delta_fs)
-        aux["rel_mae_f"] = compute_rel_mae(delta_fs, fs)
-        aux["rmse_f"] = compute_rmse(delta_fs)
-        aux["rel_rmse_f"] = compute_rel_rmse(delta_fs, fs)
-        aux["q95_f"] = compute_q95(delta_fs)
-    if stress_computed:
-        delta_stress = to_numpy(torch.cat(delta_stress_list, dim=0))
-        delta_stress_per_atom = to_numpy(torch.cat(delta_stress_per_atom_list, dim=0))
-        aux["mae_stress"] = compute_mae(delta_stress)
-        aux["rmse_stress"] = compute_rmse(delta_stress)
-        aux["rmse_stress_per_atom"] = compute_rmse(delta_stress_per_atom)
-        aux["q95_stress"] = compute_q95(delta_stress)
-    if virials_computed:
-        delta_virials = to_numpy(torch.cat(delta_virials_list, dim=0))
-        delta_virials_per_atom = to_numpy(torch.cat(delta_virials_per_atom_list, dim=0))
-        aux["mae_virials"] = compute_mae(delta_virials)
-        aux["rmse_virials"] = compute_rmse(delta_virials)
-        aux["rmse_virials_per_atom"] = compute_rmse(delta_virials_per_atom)
-        aux["q95_virials"] = compute_q95(delta_virials)
-    if Mus_computed:
-        delta_mus = to_numpy(torch.cat(delta_mus_list, dim=0))
-        delta_mus_per_atom = to_numpy(torch.cat(delta_mus_per_atom_list, dim=0))
-        mus = to_numpy(torch.cat(mus_list, dim=0))
-        aux["mae_mu"] = compute_mae(delta_mus)
-        aux["mae_mu_per_atom"] = compute_mae(delta_mus_per_atom)
-        aux["rel_mae_mu"] = compute_rel_mae(delta_mus, mus)
-        aux["rmse_mu"] = compute_rmse(delta_mus)
-        aux["rmse_mu_per_atom"] = compute_rmse(delta_mus_per_atom)
-        aux["rel_rmse_mu"] = compute_rel_rmse(delta_mus, mus)
-        aux["q95_mu"] = compute_q95(delta_mus)
-    if charges_computed:
-        delta_charges_per_atom = to_numpy(torch.cat(delta_charges_per_atom_list, dim=0))
-        charges = to_numpy(torch.cat(charges_list, dim=0))
-        aux["mae_charges_per_atom"] = compute_mae(delta_charges_per_atom)
-        aux["rmse_charges_per_atom"] = compute_rmse(delta_charges_per_atom)
-    if dipoles_computed:
-        delta_dipoles_per_atom = to_numpy(torch.cat(delta_dipoles_per_atom_list, dim=0))
-        dipoles = to_numpy(torch.cat(dipoles_list, dim=0))
-        aux["mae_dipoles_per_atom"] = compute_mae(delta_dipoles_per_atom)
-        aux["rmse_dipoles_per_atom"] = compute_rmse(delta_dipoles_per_atom)
-    if quadrupoles_computed:
-        delta_quadrupoles_per_atom = to_numpy(torch.cat(delta_quadrupoles_per_atom_list, dim=0))
-        quadrupoles = to_numpy(torch.cat(quadrupoles_list, dim=0))
-        aux["mae_quadrupoles_per_atom"] = compute_mae(delta_quadrupoles_per_atom)
-        aux["rmse_quadrupoles_per_atom"] = compute_rmse(delta_quadrupoles_per_atom)
-    if octupoles_computed:
-        delta_octupoles_per_atom = to_numpy(torch.cat(delta_octupoles_per_atom_list, dim=0))
-        octupoles = to_numpy(torch.cat(octupoles_list, dim=0))
-        aux["mae_octupoles_per_atom"] = compute_mae(delta_octupoles_per_atom)
-        aux["rmse_octupoles_per_atom"] = compute_rmse(delta_octupoles_per_atom)
+        avg_loss = total_loss / len(data_loader)
 
-    aux["time"] = time.time() - start_time
+        aux = {
+            "loss": avg_loss,
+        }
+
+        if E_computed:
+            delta_es = to_numpy(torch.cat(delta_es_list, dim=0))
+            delta_es_per_atom = to_numpy(torch.cat(delta_es_per_atom_list, dim=0))
+            aux["mae_e"] = compute_mae(delta_es)
+            aux["mae_e_per_atom"] = compute_mae(delta_es_per_atom)
+            aux["rmse_e"] = compute_rmse(delta_es)
+            aux["rmse_e_per_atom"] = compute_rmse(delta_es_per_atom)
+            aux["q95_e"] = compute_q95(delta_es)
+        if Fs_computed:
+            delta_fs = to_numpy(torch.cat(delta_fs_list, dim=0))
+            fs = to_numpy(torch.cat(fs_list, dim=0))
+            aux["mae_f"] = compute_mae(delta_fs)
+            aux["rel_mae_f"] = compute_rel_mae(delta_fs, fs)
+            aux["rmse_f"] = compute_rmse(delta_fs)
+            aux["rel_rmse_f"] = compute_rel_rmse(delta_fs, fs)
+            aux["q95_f"] = compute_q95(delta_fs)
+        if stress_computed:
+            delta_stress = to_numpy(torch.cat(delta_stress_list, dim=0))
+            delta_stress_per_atom = to_numpy(torch.cat(delta_stress_per_atom_list, dim=0))
+            aux["mae_stress"] = compute_mae(delta_stress)
+            aux["rmse_stress"] = compute_rmse(delta_stress)
+            aux["rmse_stress_per_atom"] = compute_rmse(delta_stress_per_atom)
+            aux["q95_stress"] = compute_q95(delta_stress)
+        if virials_computed:
+            delta_virials = to_numpy(torch.cat(delta_virials_list, dim=0))
+            delta_virials_per_atom = to_numpy(torch.cat(delta_virials_per_atom_list, dim=0))
+            aux["mae_virials"] = compute_mae(delta_virials)
+            aux["rmse_virials"] = compute_rmse(delta_virials)
+            aux["rmse_virials_per_atom"] = compute_rmse(delta_virials_per_atom)
+            aux["q95_virials"] = compute_q95(delta_virials)
+        if Mus_computed:
+            delta_mus = to_numpy(torch.cat(delta_mus_list, dim=0))
+            delta_mus_per_atom = to_numpy(torch.cat(delta_mus_per_atom_list, dim=0))
+            mus = to_numpy(torch.cat(mus_list, dim=0))
+            aux["mae_mu"] = compute_mae(delta_mus)
+            aux["mae_mu_per_atom"] = compute_mae(delta_mus_per_atom)
+            aux["rel_mae_mu"] = compute_rel_mae(delta_mus, mus)
+            aux["rmse_mu"] = compute_rmse(delta_mus)
+            aux["rmse_mu_per_atom"] = compute_rmse(delta_mus_per_atom)
+            aux["rel_rmse_mu"] = compute_rel_rmse(delta_mus, mus)
+            aux["q95_mu"] = compute_q95(delta_mus)
+        if charges_computed:
+            delta_charges_per_atom = to_numpy(torch.cat(delta_charges_per_atom_list, dim=0))
+            charges = to_numpy(torch.cat(charges_list, dim=0))
+            aux["mae_charges_per_atom"] = compute_mae(delta_charges_per_atom)
+            aux["rmse_charges_per_atom"] = compute_rmse(delta_charges_per_atom)
+        if dipoles_computed:
+            delta_dipoles_per_atom = to_numpy(torch.cat(delta_dipoles_per_atom_list, dim=0))
+            dipoles = to_numpy(torch.cat(dipoles_list, dim=0))
+            aux["mae_dipoles_per_atom"] = compute_mae(delta_dipoles_per_atom)
+            aux["rmse_dipoles_per_atom"] = compute_rmse(delta_dipoles_per_atom)
+        if quadrupoles_computed:
+            delta_quadrupoles_per_atom = to_numpy(torch.cat(delta_quadrupoles_per_atom_list, dim=0))
+            quadrupoles = to_numpy(torch.cat(quadrupoles_list, dim=0))
+            aux["mae_quadrupoles_per_atom"] = compute_mae(delta_quadrupoles_per_atom)
+            aux["rmse_quadrupoles_per_atom"] = compute_rmse(delta_quadrupoles_per_atom)
+        if octupoles_computed:
+            delta_octupoles_per_atom = to_numpy(torch.cat(delta_octupoles_per_atom_list, dim=0))
+            octupoles = to_numpy(torch.cat(octupoles_list, dim=0))
+            aux["mae_octupoles_per_atom"] = compute_mae(delta_octupoles_per_atom)
+            aux["rmse_octupoles_per_atom"] = compute_rmse(delta_octupoles_per_atom)
+
+        aux["time"] = time.time() - start_time
 
     return avg_loss, aux

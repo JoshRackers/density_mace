@@ -21,6 +21,7 @@ from mace.tools import torch_geometric
 from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, get_dataset_from_spicehdf5
 
 import wandb
+from datetime import date
 
 def main() -> None:
     args = tools.build_default_arg_parser().parse_args()
@@ -29,6 +30,7 @@ def main() -> None:
     if args.wandb_project != None:
         use_wandb = True
         wandb.init(project=args.wandb_project)
+        wandb.run.name = 'DATASET_' + args.train_file + '_HIGHEST_MULTIPOLE_' + str(args.highest_multipole_moment) + '_HIDDEN_IRREPS_' + args.hidden_irreps + '_' + date.today().strftime("%b-%d-%Y")
     else:
         use_wandb = False
 
