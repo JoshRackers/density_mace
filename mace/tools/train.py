@@ -357,19 +357,19 @@ def evaluate(
     octupole_cartesiantensor = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
     octupole_rtp = octupole_cartesiantensor.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
 
-    with torch.no_grad():
-        for batch in data_loader:
-            batch = batch.to(device)
-            output = model(
-                batch,
-                training=False,
-                compute_force=output_args["forces"],
-                compute_virials=output_args["virials"],
-                compute_stress=output_args["stress"],
-            )
-            #batch = batch.cpu()
-            #output = tensor_dict_to_device(output, device=torch.device("cpu"))
-
+    for batch in data_loader:
+        batch = batch.to(device)
+        output = model(
+            batch,
+            training=False,
+            compute_force=output_args["forces"],
+            compute_virials=output_args["virials"],
+            compute_stress=output_args["stress"],
+        )
+        #batch = batch.cpu()
+        #output = tensor_dict_to_device(output, device=torch.device("cpu"))
+        
+        with torch.no_grad():
             loss = loss_fn(pred=output, ref=batch)
             total_loss += to_numpy(loss).item()
 

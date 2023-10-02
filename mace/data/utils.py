@@ -55,6 +55,7 @@ class Configuration:
     stress_weight: float = 1.0  # weight of config stress in loss
     virials_weight: float = 1.0  # weight of config virial in loss
     config_type: Optional[str] = DEFAULT_CONFIG_TYPE  # config_type of config
+    elements: Optional[str] = None
 
 
 Configurations = List[Configuration]
@@ -268,7 +269,7 @@ def load_from_hdf5(
     # FUTURE: insert atomic energies stuff
 
     logging.warning("NOT USING MACE UNITS")
-    logging.info("SPICE dataset is all gas phase, not periodic")
+    logging.info("SPICE and multipoles datasets are all gas phase, not periodic")
     pbc = tuple([False,False,False])
     cell = np.array([[100,0,0],[0,100,0],[0,0,100]])
     config_type = "Default"
@@ -283,47 +284,121 @@ def load_from_hdf5(
     quad_carttensor = io.CartesianTensor("ij=ji")
     oct_carttensor = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
     configs = []
-    for name in h5_file:
-        h5data = h5_file[name]
-        #print(h5data)
-        if (subset_key == None) or (np.array(h5data["subset"]).item() == subset_key.encode('ascii')):
-            #if len(np.array(h5data["atomic_numbers"])) == 4:
-                #for idx in range(1):
-                for idx in range(len(h5data["conformations"])):
-                    #print(np.array(h5data["smiles"]))
-                    #print(np.array(h5data[charges_key][idx,:,:]))
-                    try:
-                        configs.append(Configuration(
-                            # replace these with general keys?
-                            atomic_numbers=np.array(h5data["atomic_numbers"]),
-                            positions=np.array(h5data["conformations"][idx,:,:]),
-                            energy=np.array(h5data[energy_key][idx]),
-                            forces=np.array(h5data[forces_key][idx,:,:]),
-                            #stress=stress,
-                            #virials=virials,
-                            #dipole=dipole,
-                            charges=np.array(h5data[charges_key][idx,:,:]),
-                            dipoles=np.array(h5data[dipoles_key][idx,:,:]),
-                            # assumes we've removed the trace
-                            quadrupoles=np.array(h5data[quadrupoles_key][idx,:,:,:]),
-                            # assumes we've removed the trace
-                            octupoles=np.array(h5data[octupoles_key][idx,:,:,:,:]),
 
-                            weight=weight,
-                            energy_weight=energy_weight,
-                            forces_weight=forces_weight,
-                            stress_weight=stress_weight,
-                            virials_weight=virials_weight,
-                            config_type=config_type,
-                            pbc=pbc,
-                            cell=cell,
-                        ))
-                    except:
-                        print("could not add this configuration. likely missing mbis multipoles")
-    
-    logging.info("Extracting atomic energies is currently not supported for SPICE")
-    atomic_energies_dict = {}
-    # FUTURE: insert atomic energies stuff
+    # for SPICE data
+    if "SPICE" in file_path:
+        for name in h5_file:
+            h5data = h5_file[name]
+            #print(h5data)
+            if (subset_key == None) or (np.array(h5data["subset"]).item() == subset_key.encode('ascii')):
+                #if len(np.array(h5data["atomic_numbers"])) == 4:
+                    #for idx in range(1):
+                    for idx in range(len(h5data["conformations"])):
+                        #print(np.array(h5data["smiles"]))
+                        #print(np.array(h5data[charges_key][idx,:,:]))
+                        try:
+                            configs.append(Configuration(
+                                # replace these with general keys?
+                                atomic_numbers=np.array(h5data["atomic_numbers"]),
+                                positions=np.array(h5data["conformations"][idx,:,:]),
+                                energy=np.array(h5data[energy_key][idx]),
+                                forces=np.array(h5data[forces_key][idx,:,:]),
+                                #stress=stress,
+                                #virials=virials,
+                                #dipole=dipole,
+                                charges=np.array(h5data[charges_key][idx,:,:]),
+                                dipoles=np.array(h5data[dipoles_key][idx,:,:]),
+                                # assumes we've removed the trace
+                                quadrupoles=np.array(h5data[quadrupoles_key][idx,:,:,:]),
+                                # assumes we've removed the trace
+                                octupoles=np.array(h5data[octupoles_key][idx,:,:,:,:]),
+
+                                weight=weight,
+                                energy_weight=energy_weight,
+                                forces_weight=forces_weight,
+                                stress_weight=stress_weight,
+                                virials_weight=virials_weight,
+                                config_type=config_type,
+                                pbc=pbc,
+                                cell=cell,
+                            ))
+                        except:
+                            print("could not add this configuration. likely missing mbis multipoles")
+
+        logging.info("Extracting atomic energies is currently not supported for SPICE")
+        atomic_energies_dict = {}
+        # FUTURE: insert atomic energies stuff
+    else:
+        print(">>> using multipoles dataset")
+        proceed = True
+        for i, key in enumerate(h5_file): # Iterates over each Unique Identifier
+            # convert elements to atomic numbers
+            short_periodic_table_dict = {b"H":1, b"C":6, b"N":7, b"O":8, b"F":9, b"S":16, b"CL":17, b"Cl":17}
+            elements = h5_file[key]["elements"][()]
+            atomic_numbers = [short_periodic_table_dict.get(element) for element in elements]
+            #print(elements)
+            #print(atomic_numbers)
+
+            charges = np.array(h5_file[key]["monopoles"][()])
+            dipoles = np.array(h5_file[key]["dipoles"][()])
+            quadrupoles = np.array(h5_file[key]["traceless_quadrupoles"][()])
+            octupoles=np.array(h5_file[key]["traceless_octupoles"][()])
+            if charges.shape != (len(atomic_numbers), 1):
+                proceed = False
+            elif dipoles.shape != (len(atomic_numbers), 3):
+                proceed = False
+            elif quadrupoles.shape != (len(atomic_numbers), 3, 3):
+                proceed = False
+            elif octupoles.shape != (len(atomic_numbers), 3, 3, 3):
+                proceed = False
+            
+            try:
+                energy = np.array(h5_file[key]["relative_energy"][()])
+            except:
+                energy = np.array(h5_file[key]["energy"][()])
+
+            
+
+            if proceed == True:
+                configs.append(Configuration(
+                    elements=elements,
+                    atomic_numbers=np.array(atomic_numbers),
+                    positions=np.array(h5_file[key]["coordinates"][()]),
+                    #energy=np.array(h5_file[key]["relative_energy"][()]),
+                    energy=energy,
+                    forces=-np.array(h5_file[key]["gradient"][()]),
+                    charges=np.array(h5_file[key]["monopoles"][()]),
+                    dipoles=np.array(h5_file[key]["dipoles"][()]),
+                    quadrupoles=np.array(h5_file[key]["traceless_quadrupoles"][()]),
+                    octupoles=np.array(h5_file[key]["traceless_octupoles"][()]),
+
+                    weight=weight,
+                    energy_weight=energy_weight,
+                    forces_weight=forces_weight,
+                    stress_weight=stress_weight,
+                    virials_weight=virials_weight,
+                    config_type=config_type,
+                    pbc=pbc,
+                    cell=cell,
+                ))
+            else:
+                print("missing multipoles for configuration",i,h5_file[key]["smiles"][()])
+
+            proceed = True
+
+            # charges = np.array(h5_file[key]["monopoles"][()])
+            # if charges.shape != (len(atomic_numbers), 1):
+            #     print("charges shape is not correct!",i,charges.shape,len(atomic_numbers),atomic_numbers)
+            #     print(charges)
+
+            #assert charges is None or charges.shape == (len(atomic_numbers), 1) or charges.shape == (len(atomic_numbers),)
+
+
+            # print("charges",np.array(h5_file[key]["monopoles"][()]).shape)
+            # print("charges",np.array(h5_file[key]["monopoles"][()]))
+
+            # if i > 100:
+            #     break
 
     return atomic_energies_dict, configs
 

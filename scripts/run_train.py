@@ -18,7 +18,7 @@ from torch_ema import ExponentialMovingAverage
 import mace
 from mace import data, modules, tools
 from mace.tools import torch_geometric
-from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, get_dataset_from_spicehdf5
+from mace.tools.scripts_utils import create_error_table, get_dataset_from_xyz, get_dataset_from_hdf5
 
 import wandb
 from datetime import date
@@ -56,7 +56,7 @@ def main() -> None:
 
     # Data preparation
     if args.use_hdf5:
-        collections, atomic_energies_dict = get_dataset_from_spicehdf5(
+        collections, atomic_energies_dict = get_dataset_from_hdf5(
             train_path=args.train_file,
             valid_path=args.valid_file,
             subset_key=args.spice_subset,
@@ -125,7 +125,7 @@ def main() -> None:
         compute_energy = False
         args.compute_forces = False
         compute_virials = False
-        args.compute_stress = False
+        args.compute_stress = False 
     else:
         dipole_only = False
         if args.model == "EnergyDipolesMACE":

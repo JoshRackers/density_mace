@@ -20,6 +20,7 @@ from .blocks import (
     RealAgnosticResidualInteractionBlock,
     ResidualElementDependentInteractionBlock,
     ScaleShiftBlock,
+    HellmannFeynman,
 )
 from .loss import (
     MultipolesLoss,
@@ -33,6 +34,7 @@ from .loss import (
 )
 from .models import (
     MACE,
+    LongRangeMACE,
     AtomicDipolesMACE,
     AtomicMultipolesMACE,
     BOTNet,
@@ -88,6 +90,7 @@ __all__ = [
     "ScaleShiftMACE",
     "BOTNet",
     "ScaleShiftBOTNet",
+    "LongRangeMACE"
     "DensityMACE",
     "AtomicMultipolesMACE"
     "AtomicDipolesMACE",

@@ -643,3 +643,44 @@ class ScaleShiftBlock(torch.nn.Module):
         return (
             f"{self.__class__.__name__}(scale={self.scale:.6f}, shift={self.shift:.6f})"
         )
+
+class HellmannFeynman(torch.nn.Module):
+    def __init__(self, r_cutoff:float, highest_multipole_moment: int):
+        self.highest_multipole_moment = highest_multipole_moment
+        self.r_cutoff = r_cutoff
+        self.coulomb_constant = 1.0
+
+    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor, quadrupoles: torch.Tensor, octupoles: torch.Tensor):
+        batch_energies = []
+        batch_forces = []
+        # loop over samples in batch
+        for pts, chgs, dips, quads, octs in zip(positions, charges, dipoles, quadrupoles, octupoles):
+            n_atoms = len(pts)
+            energy = 0
+            forces = torch.zeros([3,n_atoms])
+            # now loop N^2 over atoms in sample 
+            for i, (i_pt, i_chg, i_dip, i_quad, i_oct) in enumerate(zip(pts, chgs, dips, quads, octs)):
+                for k, (k_pt, k_chg, k_dip, k_quad, k_oct) in enumerate(zip(pts[i+1:], chgs[i+1:], dips[i+1:], quads[i+1:], octs[i+1])):
+                    print("PAIR:",i,k)
+                    r_vec = k_pt-i_pt
+                    r2 = r_vec**2
+                    r = torch.sqrt(r2)
+                    r3 = r2*r
+                    e = self.coulomb_constant * i_chg * k_chg / r
+                    energy += e
+                    f = self.coulomb_constant * i_chg * k_chg * r_vec / r3
+                    forces[:,i] += f
+                    forces[:,k] -= f
+            
+            batch_energies.append(energy)
+            batch_forces.append(forces)
+            
+        # now stack the energies and forces 
+        all_energies = torch.stack(batch_energies)
+        all_forces = torch.stack(batch_forces)
+
+        # FUTURE: add stress and virial
+        return {
+            "energy": all_energies,
+            "forces": all_forces
+        }

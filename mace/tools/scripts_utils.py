@@ -22,7 +22,7 @@ class SubsetCollection:
     valid: data.Configurations
     tests: List[Tuple[str, data.Configurations]]
 
-def get_dataset_from_spicehdf5(
+def get_dataset_from_hdf5(
     train_path: str,
     valid_path: str,
     subset_key: str,

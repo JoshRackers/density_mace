@@ -13,12 +13,15 @@ import torch
 
 from mace import data, tools
 from mace.tools import torch_geometric
+from mace.tools.scripts_utils import get_dataset_from_hdf5
 
+### need to add parser for hdf5 dataset specific args here
+### can i just use the existing one? define another parser?
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--configs", help="path to XYZ configurations", required=True)
-    parser.add_argument("--model", help="path to model", required=True)
+    parser.add_argument("--model_path", help="path to model", required=True)
     parser.add_argument("--output", help="output path", required=True)
     parser.add_argument(
         "--device",
@@ -41,6 +44,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=True,
     )
+    parser.add_argument(
+        "--use_hdf5", 
+        help="Select True to get training data from hdf5 rather than xyz",
+        type=bool,
+        default=False,
+    )
+
     return parser.parse_args()
 
 
@@ -50,11 +60,31 @@ def main():
     device = tools.init_device(args.device)
 
     # Load model
-    model = torch.load(f=args.model, map_location=device)
+    model = torch.load(f=args.model_path, map_location=device)
 
     # Load data and prepare input
-    atoms_list = ase.io.read(args.configs, format="extxyz", index=":")
-    configs = [data.config_from_atoms(atoms) for atoms in atoms_list]
+    if args.use_hdf5:
+        collections, atomic_energies_dict = get_dataset_from_hdf5(
+            train_path=args.configs,
+            valid_path=None,
+            subset_key=None,
+            valid_fraction=0.000001,
+            config_type_weights=None,
+        )
+        configs = collections.train
+        atoms_list = []
+        for config in configs:
+            #print("elements",config.elements.tolist())
+            elements = [b.decode('utf-8') for b in config.elements]
+            atoms = ase.Atoms(elements,positions=config.positions)
+            atoms.info["energy"] = config.energy
+            atoms.arrays["forces"] = config.forces
+            atoms_list.append(atoms)
+            #atoms_list.append(ase.Atoms(elements,positions=config.positions))
+
+    else:
+        atoms_list = ase.io.read(args.configs, format="extxyz", index=":")
+        configs = [data.config_from_atoms(atoms) for atoms in atoms_list]
 
     z_table = tools.AtomicNumberTable([int(z) for z in model.atomic_numbers])
 
@@ -95,6 +125,8 @@ def main():
     if not args.no_contributions:
         contributions = np.concatenate(contributions_list, axis=0)
         assert len(atoms_list) == contributions.shape[0]
+
+    ase.io.write("reference.out", images=atoms_list, format="extxyz")
 
     # Store data in atoms objects
     for i, (atoms, energy, forces) in enumerate(zip(atoms_list, energies, forces_list)):
