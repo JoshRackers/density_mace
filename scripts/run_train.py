@@ -374,6 +374,42 @@ def main() -> None:
             # ],
             # MLP_irreps=o3.Irreps(args.MLP_irreps),
         )
+    elif args.model == "LongRangeMACE":
+        specific_config = dict(
+            include_longrange=False,
+            multipole_highest_multipole_moment=args.highest_multipole_moment,
+            multipole_correlation=args.correlation,
+            multipole_gate=modules.gate_dict[args.gate],
+            multipole_interaction_cls_first=modules.interaction_classes[
+                "RealAgnosticInteractionBlock"
+            ],
+            multipole_MLP_irreps=o3.Irreps(args.MLP_irreps),
+            #
+            multipole_r_max=args.r_max,
+            multipole_num_bessel=args.num_radial_basis,
+            multipole_num_polynomial_cutoff=args.num_cutoff_basis,
+            multipole_max_ell=args.max_ell,
+            multipole_interaction_cls=modules.interaction_classes[args.interaction],
+            multipole_num_interactions=args.num_interactions,
+            multipole_num_elements=len(z_table),
+            multipole_hidden_irreps=o3.Irreps(args.hidden_irreps),
+            multipole_atomic_energies=atomic_energies,
+            multipole_avg_num_neighbors=args.avg_num_neighbors,
+            multipole_atomic_numbers=z_table.zs,
+            #
+            correlation=args.correlation,
+            gate=modules.gate_dict[args.gate],
+            interaction_cls_first=modules.interaction_classes[
+                "RealAgnosticInteractionBlock"
+            ],
+            MLP_irreps=o3.Irreps(args.MLP_irreps),
+        )
+
+        whole_model_config = {**model_config, **specific_config}
+        wandb.config = whole_model_config
+        model = modules.LongRangeMACE(
+            **whole_model_config,
+        )
     else:
         raise RuntimeError(f"Unknown model: '{args.model}'")
 

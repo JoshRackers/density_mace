@@ -345,12 +345,16 @@ def load_from_hdf5(
             octupoles=np.array(h5_file[key]["traceless_octupoles"][()])
             if charges.shape != (len(atomic_numbers), 1):
                 proceed = False
+                print("mono",charges.shape,len(atomic_numbers))
             elif dipoles.shape != (len(atomic_numbers), 3):
                 proceed = False
+                print("dip")
             elif quadrupoles.shape != (len(atomic_numbers), 3, 3):
                 proceed = False
+                print("quad")
             elif octupoles.shape != (len(atomic_numbers), 3, 3, 3):
                 proceed = False
+                print("oct")
             
             try:
                 energy = np.array(h5_file[key]["relative_energy"][()])
@@ -382,7 +386,8 @@ def load_from_hdf5(
                     cell=cell,
                 ))
             else:
-                print("missing multipoles for configuration",i,h5_file[key]["smiles"][()])
+                #print("missing multipoles for configuration",i,h5_file[key]["smiles"][()])
+                print("missing multipoles for configuration",i)
 
             proceed = True
 

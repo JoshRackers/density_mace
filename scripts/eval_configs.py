@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
         default="float64",
     )
     parser.add_argument("--batch_size", help="batch size", type=int, default=64)
+    
     parser.add_argument(
         "--no_contributions",
         help="model does not output energy contributions ",

@@ -59,22 +59,22 @@ class LongRangeMACE(torch.nn.Module):
         multipole_gate: Optional[Callable],
         multipole_atomic_energies: Optional[None], 
         # now mace arguments
-        mace_r_max: float,
-        mace_num_bessel: int,
-        mace_num_polynomial_cutoff: int,
-        mace_max_ell: int,
-        mace_interaction_cls: Type[InteractionBlock],
-        mace_interaction_cls_first: Type[InteractionBlock],
-        mace_num_interactions: int,
-        mace_num_elements: int,
-        mace_hidden_irreps: o3.Irreps,
-        mace_MLP_irreps: o3.Irreps,
-        mace_atomic_energies: np.ndarray,
-        mace_avg_num_neighbors: float,
-        mace_atomic_numbers: List[int],
-        mace_correlation: int,
-        mace_gate: Optional[Callable],
-        mace_irreps_in: o3.Irreps=None,
+        r_max: float,
+        num_bessel: int,
+        num_polynomial_cutoff: int,
+        max_ell: int,
+        interaction_cls: Type[InteractionBlock],
+        interaction_cls_first: Type[InteractionBlock],
+        num_interactions: int,
+        num_elements: int,
+        hidden_irreps: o3.Irreps,
+        MLP_irreps: o3.Irreps,
+        atomic_energies: np.ndarray,
+        avg_num_neighbors: float,
+        atomic_numbers: List[int],
+        correlation: int,
+        gate: Optional[Callable],
+        # irreps_in: o3.Irreps=None,
         # now hellmann-feynman arguments
         include_longrange: bool=True,
         r_cutoff: float=10.0,
@@ -82,6 +82,9 @@ class LongRangeMACE(torch.nn.Module):
         super().__init__()
         self.include_longrange = include_longrange
         self.highest_multipole_moment = multipole_highest_multipole_moment
+        self.interactions = torch.nn.ModuleList()
+        self.products = torch.nn.ModuleList()
+        self.readouts = torch.nn.ModuleList()
 
         # multipole model
         # TODO: fix these arguments
@@ -104,27 +107,45 @@ class LongRangeMACE(torch.nn.Module):
             MLP_irreps=multipole_MLP_irreps, 
         )
         self.MultipoleModel = AtomicMultipolesMACE(**multipoles_model_config)
+        self.interactions.append(self.MultipoleModel.interactions)
+        self.products.append(self.MultipoleModel.products)
+        self.readouts.append(self.MultipoleModel.readouts)
+        self.node_embedding = self.MultipoleModel.node_embedding
 
         # energy model with multipole inputs, just regular MACE for now
+        if multipole_highest_multipole_moment == 0:
+            irreps_in = o3.Irreps("1x0e")
+        elif multipole_highest_multipole_moment == 1:
+            irreps_in = o3.Irreps("1x0e + 1x1o")
+        elif multipole_highest_multipole_moment == 2:
+            irreps_in = o3.Irreps("1x0e + 1x1o + 1x2e")
+        elif multipole_highest_multipole_moment == 3:
+            irreps_in = o3.Irreps("1x0e + 1x1o + 1x2e + 1x3o")
+        elif multipole_highest_multipole_moment == 4:
+            irreps_in = o3.Irreps("1x0e + 1x1o + 1x2e + 1x3o + 1x4e")
+
         mace_model_config = dict(
-            r_max=mace_r_max,
-            num_bessel=mace_num_bessel,
-            num_polynomial_cutoff=mace_num_polynomial_cutoff,
-            max_ell=mace_max_ell,
-            interaction_cls=mace_interaction_cls,
-            num_interactions=mace_num_interactions,
-            num_elements=mace_num_elements,
-            hidden_irreps=mace_hidden_irreps,
-            atomic_energies=mace_atomic_energies,
-            avg_num_neighbors=mace_avg_num_neighbors,
-            atomic_numbers=mace_atomic_numbers,
-            correlation=mace_correlation,
-            gate=mace_gate,
-            interaction_cls_first=mace_interaction_cls_first,
-            MLP_irreps=mace_MLP_irreps,
-            irreps_in=mace_irreps_in,
+            r_max=r_max,
+            num_bessel=num_bessel,
+            num_polynomial_cutoff=num_polynomial_cutoff,
+            max_ell=max_ell,
+            interaction_cls=interaction_cls,
+            num_interactions=num_interactions,
+            num_elements=num_elements,
+            hidden_irreps=hidden_irreps,
+            atomic_energies=atomic_energies,
+            avg_num_neighbors=avg_num_neighbors,
+            atomic_numbers=atomic_numbers,
+            correlation=correlation,
+            gate=gate,
+            interaction_cls_first=interaction_cls_first,
+            MLP_irreps=MLP_irreps,
+            irreps_in=irreps_in,
         )
         self.LocalEnergyForceModel = MACE(**mace_model_config)
+        self.interactions.append(self.LocalEnergyForceModel.interactions)
+        self.products.append(self.LocalEnergyForceModel.products)
+        self.readouts.append(self.LocalEnergyForceModel.readouts)
 
         # electrostatic energy (hellmann-feynman) energy and force model
         if include_longrange:
@@ -143,6 +164,14 @@ class LongRangeMACE(torch.nn.Module):
         compute_virials: bool = False,
         compute_stress: bool = False,
     ):
+        data.positions.requires_grad = True
+        if not training:
+            for p in self.parameters():
+                p.requires_grad = False
+        else:
+            for p in self.parameters():
+                p.requires_grad = True
+        print("data",data)
         # returns dictionary of multipoles
         multipoles_dict = self.MultipoleModel(data)
         multipoles = multipoles_dict["multipoles"]
@@ -156,7 +185,23 @@ class LongRangeMACE(torch.nn.Module):
         #     energy, force = self.HFEnergyForce()
 
         # input multipoles as node features in MACE model
-        energy_and_forces = self.LocalEnergyForceModel(data,input_node_features=multipoles)
+        data2 = data.clone()
+        energy_and_forces = self.LocalEnergyForceModel(data2, compute_force=False, input_node_features=multipoles)
+
+        # now compute force
+        # this computes grad on the whole model, not just the MACE part
+        forces, virials, stress = get_outputs(
+            energy=energy_and_forces["energy"],
+            positions=data.positions,
+            displacement=None,
+            cell=data.cell,
+            training=training,
+            compute_force=compute_force,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+        )
+
+        energy_and_forces["forces"] = forces
 
         # dictionary contains multipoles, energy, forces, virials, stress
         return {**multipoles_dict, **energy_and_forces}
@@ -186,7 +231,7 @@ class AtomicMultipolesMACE(torch.nn.Module):
         ],  # Just here to make it compatible with energy models, MUST be None
     ):
         super().__init__()
-        assert atomic_energies is None
+        #assert atomic_energies is None
         self.r_max = r_max
         self.atomic_numbers = atomic_numbers
         self.highest_multipole_moment = highest_multipole_moment
@@ -627,14 +672,19 @@ class MACE(torch.nn.Module):
         self.r_max = r_max
         self.atomic_numbers = atomic_numbers
         # Embedding
+        node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
+        node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
+        print("irreps",irreps_in, node_feats_irreps, node_attr_irreps)
         if irreps_in == None:
-            node_attr_irreps = o3.Irreps([(num_elements, (0, 1))])
-            node_feats_irreps = o3.Irreps([(hidden_irreps.count(o3.Irrep(0, 1)), (0, 1))])
             self.node_embedding = LinearNodeEmbeddingBlock(
                 irreps_in=node_attr_irreps, irreps_out=node_feats_irreps
             )
         else:
-            self.node_embedding = None
+            print("got it")
+            self.node_embedding = LinearNodeEmbeddingBlock(
+                irreps_in=irreps_in, irreps_out=node_feats_irreps
+            )
+            #self.node_embedding = None
 
         self.radial_embedding = RadialEmbeddingBlock(
             r_max=r_max,
@@ -652,6 +702,8 @@ class MACE(torch.nn.Module):
 
         # Interactions and readout
         self.atomic_energies_fn = AtomicEnergiesBlock(atomic_energies)
+
+        print("MACE node_feats_irreps",node_feats_irreps)
 
         inter = interaction_cls_first(
             node_attrs_irreps=node_attr_irreps,
@@ -723,10 +775,11 @@ class MACE(torch.nn.Module):
         compute_force: bool = True,
         compute_virials: bool = False,
         compute_stress: bool = False,
-        input_node_features: str = None,
+        input_node_features: torch.Tensor = None,
     ) -> Dict[str, Any]:
         # Setup
-        data.positions.requires_grad = True
+        if compute_force:
+            data.positions.requires_grad = True
         displacement = None
         if compute_virials or compute_stress:
             data.positions, data.shifts, displacement = get_symmetric_displacement(
@@ -748,14 +801,18 @@ class MACE(torch.nn.Module):
         if input_node_features == None:
             node_feats = self.node_embedding(data.node_attrs)
         else:
+            print("correct")
             # these must match irreps_in. maybe check this?
-            node_feats = input_node_features
+            node_feats = self.node_embedding(input_node_features.unsqueeze(-1))
+            #node_feats = input_node_features
 
         vectors, lengths = get_edge_vectors_and_lengths(
             positions=data.positions, edge_index=data.edge_index, shifts=data.shifts
         )
         edge_attrs = self.spherical_harmonics(vectors)
         edge_feats = self.radial_embedding(lengths)
+
+        print("!!!!!!node_feats",node_feats.shape)
 
         # Interactions
         energies = [e0]
