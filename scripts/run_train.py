@@ -224,6 +224,14 @@ def main() -> None:
         )
     elif args.loss == "multipoles":
         loss_fn = modules.MultipolesLoss(device=device, highest_multipole_moment=args.highest_multipole_moment)
+    elif args.loss == "energy_forces_multipoles":
+        loss_fn = modules.WeightedEnergyForcesMultipolesLoss(
+            device=device, 
+            highest_multipole_moment=args.highest_multipole_moment,
+            energy_weight=args.energy_weight,
+            forces_weight=args.forces_weight,
+            multipole_weight=args.multipole_weight,
+        )
     else:
         loss_fn = modules.EnergyForcesLoss(
             energy_weight=args.energy_weight, forces_weight=args.forces_weight
@@ -376,7 +384,8 @@ def main() -> None:
         )
     elif args.model == "LongRangeMACE":
         specific_config = dict(
-            include_longrange=False,
+            include_longrange=args.include_longrange,
+            local_backprop_only=args.local_backprop_only,
             multipole_highest_multipole_moment=args.highest_multipole_moment,
             multipole_correlation=args.correlation,
             multipole_gate=modules.gate_dict[args.gate],

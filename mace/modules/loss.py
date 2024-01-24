@@ -98,7 +98,6 @@ def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str, devi
             zeros = torch.zeros(len(pred[moment]), device=device)
             pred_trace = torch.cat((zeros.unsqueeze(-1),pred[moment]),dim=-1)
             pred_cart = cart.to_cartesian(pred_trace, rtp=rtp)
-            multiplier = 1
             # print("qudrupole loss")
             # print("ref")
             # print(ref_cart)
@@ -117,7 +116,7 @@ def mean_squared_error_multipole(ref: Batch, pred: TensorDict, moment: str, devi
             # print("pred")
             # print(pred_cart)
     
-    return torch.mean(torch.square(ref_cart - pred_cart)) * 1000 * multiplier
+    return torch.mean(torch.square(ref_cart - pred_cart)) * multiplier
 
 
 class EnergyForcesLoss(torch.nn.Module):
@@ -326,3 +325,56 @@ class MultipolesLoss(torch.nn.Module):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(" f"multipole_weight={self.multipole_weight:.3f})"
+    
+
+class WeightedEnergyForcesMultipolesLoss(torch.nn.Module):
+    def __init__(self, device, highest_multipole_moment: int, energy_weight=1.0, forces_weight=1.0, multipole_weight=1.0) -> None:
+        super().__init__()
+        self.register_buffer(
+            "highest_multipole_moment",
+            torch.tensor(highest_multipole_moment, dtype=torch.get_default_dtype()),
+        )
+        self.register_buffer(
+            "energy_weight",
+            torch.tensor(energy_weight, dtype=torch.get_default_dtype()),
+        )
+        self.register_buffer(
+            "forces_weight",
+            torch.tensor(forces_weight, dtype=torch.get_default_dtype()),
+        )
+        self.register_buffer(
+            "multipole_weight",
+            torch.tensor(multipole_weight, dtype=torch.get_default_dtype()),
+        )
+        self.device = device
+        quad_cart = io.CartesianTensor("ij=ji")
+        self.quadrupole_cartesiantensor = quad_cart
+        self.quadrupole_rtp = quad_cart.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+        oct_cart = io.CartesianTensor("ijk=ikj=jki=jik=kij=kji")
+        self.octupole_cartesiantensor = oct_cart
+        self.octupole_rtp = oct_cart.reduced_tensor_products().to(device, dtype=torch.get_default_dtype())
+
+    def forward(self, ref: Batch, pred: TensorDict) -> torch.Tensor:
+        energy_error = self.energy_weight * weighted_mean_squared_error_energy(ref, pred)
+        forces_error = self.forces_weight * mean_squared_error_forces(ref, pred)
+
+        if self.highest_multipole_moment >= 0:
+            multipole_error = self.multipole_weight * mean_squared_error_multipole(ref, pred, device=self.device, moment="charges")
+        if self.highest_multipole_moment >= 1:
+            multipole_error += self.multipole_weight * mean_squared_error_multipole(ref, pred, device=self.device, moment="dipoles")
+        if self.highest_multipole_moment >= 2:
+            multipole_error += self.multipole_weight * mean_squared_error_multipole(ref, pred, device=self.device, moment="quadrupoles", cart = self.quadrupole_cartesiantensor, rtp = self.quadrupole_rtp)
+        if self.highest_multipole_moment >= 3:
+            multipole_error += self.multipole_weight * mean_squared_error_multipole(ref, pred, device=self.device, moment="octupoles", cart = self.octupole_cartesiantensor, rtp = self.octupole_rtp)
+
+        # print("energy:",energy_error)
+        # print("forces:",forces_error)
+        # print("multipoles:",multipole_error)
+
+        return (energy_error + forces_error + multipole_error)
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(energy_weight={self.energy_weight:.3f}, "
+            f"forces_weight={self.forces_weight:.3f}, multipole_weight={self.multipole_weight:.3f})"
+        )

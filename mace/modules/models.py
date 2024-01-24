@@ -77,14 +77,18 @@ class LongRangeMACE(torch.nn.Module):
         # irreps_in: o3.Irreps=None,
         # now hellmann-feynman arguments
         include_longrange: bool=True,
+        local_backprop_only: bool=False,
         r_cutoff: float=10.0,
     ):
         super().__init__()
         self.include_longrange = include_longrange
+        self.local_backprop_only = local_backprop_only
         self.highest_multipole_moment = multipole_highest_multipole_moment
         self.interactions = torch.nn.ModuleList()
         self.products = torch.nn.ModuleList()
         self.readouts = torch.nn.ModuleList()
+        self.atomic_numbers = atomic_numbers
+        self.r_cutoff = r_cutoff
 
         # multipole model
         # TODO: fix these arguments
@@ -150,7 +154,8 @@ class LongRangeMACE(torch.nn.Module):
         # electrostatic energy (hellmann-feynman) energy and force model
         if include_longrange:
             hf_config = dict(
-                r_cutoff=10,
+                atomic_numbers=atomic_numbers,
+                r_cutoff=self.r_cutoff,
                 highest_multipole_moment = self.highest_multipole_moment,
             )
             self.HFEnergyForce = HellmannFeynman(**hf_config)
@@ -171,28 +176,39 @@ class LongRangeMACE(torch.nn.Module):
         else:
             for p in self.parameters():
                 p.requires_grad = True
-        print("data",data)
+        #print("data",data)
         # returns dictionary of multipoles
-        multipoles_dict = self.MultipoleModel(data)
+        multipoles_dict = self.MultipoleModel(data, training=training)
         multipoles = multipoles_dict["multipoles"]
-        print("multipoles")
-        print(multipoles.shape)
+        # print("multipoles",multipoles)
 
-        # convert dictionary to input features
-
-        # compute Hellmann-Feynman energy and force if requested
-        # if self.include_longrange:
-        #     energy, force = self.HFEnergyForce()
-
-        # input multipoles as node features in MACE model
         data2 = data.clone()
-        energy_and_forces = self.LocalEnergyForceModel(data2, compute_force=False, input_node_features=multipoles)
+        if self.local_backprop_only:
+            pos = data2.positions
+            # this separates the whole second half (local and HF)
+            # it would be possible to include just one or the other but that option is currently not included
+            multipoles.detach_()
+        else:
+            pos = data.positions
+        local_result = self.LocalEnergyForceModel(data2, training=training, compute_force=False, input_node_features=multipoles)
 
-        # now compute force
-        # this computes grad on the whole model, not just the MACE part
+        # get energy
+        if self.include_longrange:
+            # compute Hellmann-Feynman energy and force if requested
+            hf_result = self.HFEnergyForce(self.highest_multipole_moment, data2.batch, data2.positions, multipoles)
+
+            # combine the long and short range parts
+            total_energy = hf_result["energy"] + local_result["energy"]
+            print("local energy:", local_result["energy"])
+            print("   hf energy:",hf_result["energy"])
+        else:
+            total_energy = local_result["energy"]
+
+        # now get forces
+        # above we choose if we want grad of whole model or just local part
         forces, virials, stress = get_outputs(
-            energy=energy_and_forces["energy"],
-            positions=data.positions,
+            energy=total_energy,
+            positions=pos,
             displacement=None,
             cell=data.cell,
             training=training,
@@ -200,13 +216,29 @@ class LongRangeMACE(torch.nn.Module):
             compute_virials=compute_virials,
             compute_stress=compute_stress,
         )
+        total_forces = forces
 
-        energy_and_forces["forces"] = forces
+        # if using local backprop, get hf_forces
+        if self.local_backprop_only and self.include_longrange:
+            hf_forces, virials, stress = get_outputs(
+                        energy=hf_result["energy"],
+                        positions=data2.positions,
+                        displacement=None,
+                        cell=data.cell,
+                        training=training,
+                        compute_force=compute_force,
+                        compute_virials=compute_virials,
+                        compute_stress=compute_stress,
+                    )
+            total_forces += hf_forces
 
+        #print(total_forces)
         # dictionary contains multipoles, energy, forces, virials, stress
-        return {**multipoles_dict, **energy_and_forces}
-
-
+        return {**multipoles_dict,
+                 "energy": total_energy,
+                 "forces": total_forces,
+        }
+    
 
 class AtomicMultipolesMACE(torch.nn.Module):
     def __init__(
@@ -445,7 +477,6 @@ class AtomicMultipolesMACE(torch.nn.Module):
             "octupoles": octupoles,
             "multipoles": atomic_multipoles,
         }
-
 
         return output
 
@@ -703,7 +734,7 @@ class MACE(torch.nn.Module):
         # Interactions and readout
         self.atomic_energies_fn = AtomicEnergiesBlock(atomic_energies)
 
-        print("MACE node_feats_irreps",node_feats_irreps)
+        #print("MACE node_feats_irreps",node_feats_irreps)
 
         inter = interaction_cls_first(
             node_attrs_irreps=node_attr_irreps,
@@ -801,7 +832,6 @@ class MACE(torch.nn.Module):
         if input_node_features == None:
             node_feats = self.node_embedding(data.node_attrs)
         else:
-            print("correct")
             # these must match irreps_in. maybe check this?
             node_feats = self.node_embedding(input_node_features.unsqueeze(-1))
             #node_feats = input_node_features
@@ -812,7 +842,7 @@ class MACE(torch.nn.Module):
         edge_attrs = self.spherical_harmonics(vectors)
         edge_feats = self.radial_embedding(lengths)
 
-        print("!!!!!!node_feats",node_feats.shape)
+        #print("!!!!!!node_feats",node_feats.shape)
 
         # Interactions
         energies = [e0]

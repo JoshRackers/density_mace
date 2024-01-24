@@ -76,7 +76,7 @@ def train(
         # Train
         cumulative_loss = 0.0
         for i, batch in enumerate(train_loader):
-            logging.info(f"Step {i}")
+            #logging.info(f"Step {i}")
             step_loss, opt_metrics = take_step(
                 model=model,
                 loss_fn=loss_fn,
@@ -251,53 +251,53 @@ def take_step(
     start_time = time.time()
     batch = batch.to(device)
     optimizer.zero_grad()
-    with torch.autograd.detect_anomaly():
-        output = model(
-            batch,
-            training=True,
-            compute_force=output_args["forces"],
-            compute_virials=output_args["virials"],
-            compute_stress=output_args["stress"],
-        )
+    #with torch.autograd.detect_anomaly():
+    output = model(
+        batch,
+        training=True,
+        compute_force=output_args["forces"],
+        compute_virials=output_args["virials"],
+        compute_stress=output_args["stress"],
+    )
 
-        #print("train, output",output["charges"])
-        #print("train, batch ", batch["charges"])
-        loss = loss_fn(pred=output, ref=batch)
-        
-        torch.set_printoptions(precision=10)
-        try:
-            print("energy, ref:", batch["energy"]," pred:", output["energy"])
-        except:
-            pass
+    # print("train, output",output["charges"])
+    # print("train, batch ", batch["charges"])
+    loss = loss_fn(pred=output, ref=batch)
+    
+    # torch.set_printoptions(precision=10)
+    # try:
+    #     print("energy, ref:", batch["energy"]," pred:", output["energy"])
+    # except:
+    #     pass
 
-        # try:
-        #     print(" ref charge",batch["charges"])
-        #     print("pred charge",output["charges"].data)
-        # except:
-        #     pass
+    # try:
+    #     print(" ref charge",batch["charges"])
+    #     print("pred charge",output["charges"].data)
+    # except:
+    #     pass
 
-        # try:
-        #     print(" ref dipoles",batch["dipoles"])
-        #     print("pred dipoles",output["dipoles"].data)
-        # except:
-        #     pass
+    # try:
+    #     print(" ref dipoles",batch["dipoles"])
+    #     print("pred dipoles",output["dipoles"].data)
+    # except:
+    #     pass
 
-        # print("loss",loss.data)
+    # print("loss",loss.data)
 
-        # try:
-        #     print(" ref quadrupoles",batch["quadrupoles"])
-        #     print("pred quadrupoles",output["quadrupoles"].data)
-        # except:
-        #     pass
+    # try:
+    #     print(" ref quadrupoles",batch["quadrupoles"])
+    #     print("pred quadrupoles",output["quadrupoles"].data)
+    # except:
+    #     pass
 
-        
+    
 
-        # print(" ref charge",batch["charges"][0,:],"dipole",batch["dipoles"][0,:])
-        # print("pred charge",output["charges"][0,:].data,"dipole",output["dipoles"][0,:].data)
-        # print(output["charges"].shape,batch["charges"].shape)
-        # print(output["dipoles"].shape,batch["dipoles"].shape)
-        print("BACKWARD")
-        loss.backward()
+    # print(" ref charge",batch["charges"][0,:],"dipole",batch["dipoles"][0,:])
+    # print("pred charge",output["charges"][0,:].data,"dipole",output["dipoles"][0,:].data)
+    # print(output["charges"].shape,batch["charges"].shape)
+    # print(output["dipoles"].shape,batch["dipoles"].shape)
+
+    loss.backward()
     
     if max_grad_norm is not None:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_grad_norm)

@@ -5,7 +5,7 @@
 ###########################################################################################
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch.nn.functional
@@ -645,42 +645,103 @@ class ScaleShiftBlock(torch.nn.Module):
         )
 
 class HellmannFeynman(torch.nn.Module):
-    def __init__(self, r_cutoff:float, highest_multipole_moment: int):
+    def __init__(self, atomic_numbers: List[int], r_cutoff:float, highest_multipole_moment: int):
+        super().__init__()
         self.highest_multipole_moment = highest_multipole_moment
         self.r_cutoff = r_cutoff
         self.coulomb_constant = 1.0
+        self.atomic_numbers = atomic_numbers
 
-    def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor, quadrupoles: torch.Tensor, octupoles: torch.Tensor):
-        batch_energies = []
-        batch_forces = []
-        # loop over samples in batch
-        for pts, chgs, dips, quads, octs in zip(positions, charges, dipoles, quadrupoles, octupoles):
-            n_atoms = len(pts)
+    #def forward(self, positions: torch.Tensor, charges: torch.Tensor, dipoles: torch.Tensor, quadrupoles: torch.Tensor, octupoles: torch.Tensor):
+    def forward(self, highest_multipole_moment, batch, positions: torch.Tensor, atomic_multipoles: torch.Tensor):
+        batched_energies = []
+        # batched_forces = []
+        batched_positions = []
+        batched_multipoles = []
+
+        # unbatch the positions and multipoles
+        # could use https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/utils/_unbatch.html
+        # and https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/utils/_degree.html#degree 
+        batch_positions = []
+        batch_multipoles = []
+        current_batch_index = 0
+        for batch_index, pos, multipole in zip(batch, positions, atomic_multipoles):
+            if current_batch_index == batch_index:
+                batch_positions.append(pos)
+                batch_multipoles.append(multipole)
+            else:
+                # add to list of batches
+                batched_positions.append(torch.stack(batch_positions))
+                batched_multipoles.append(torch.stack(batch_multipoles))
+                # and start over
+                current_batch_index = batch_index
+                batch_positions = []
+                batch_multipoles = []
+                batch_positions.append(pos)
+                batch_multipoles.append(multipole)
+        # get the last batch
+        batched_positions.append(torch.stack(batch_positions))
+        batched_multipoles.append(torch.stack(batch_multipoles))
+        # print("batched_multipoles",batched_multipoles)
+        # print("batched_positions",batched_positions)
+        
+        # loop over batches
+        for pts, multipoles in zip(batched_positions, batched_multipoles):
             energy = 0
-            forces = torch.zeros([3,n_atoms])
+            forces = torch.zeros_like(pts)
             # now loop N^2 over atoms in sample 
-            for i, (i_pt, i_chg, i_dip, i_quad, i_oct) in enumerate(zip(pts, chgs, dips, quads, octs)):
-                for k, (k_pt, k_chg, k_dip, k_quad, k_oct) in enumerate(zip(pts[i+1:], chgs[i+1:], dips[i+1:], quads[i+1:], octs[i+1])):
-                    print("PAIR:",i,k)
-                    r_vec = k_pt-i_pt
-                    r2 = r_vec**2
-                    r = torch.sqrt(r2)
-                    r3 = r2*r
-                    e = self.coulomb_constant * i_chg * k_chg / r
-                    energy += e
-                    f = self.coulomb_constant * i_chg * k_chg * r_vec / r3
-                    forces[:,i] += f
-                    forces[:,k] -= f
+            for i, (i_pt, i_multipole) in enumerate(zip(pts, multipoles)):
+                for k, (k_pt, k_multipole) in enumerate(zip(pts[i:], multipoles[i:])):
+                    i_index = i
+                    k_index = k+i
+                    if i_index != k_index:
+                        #print("PAIR:",i_index,k_index)
+                        if highest_multipole_moment == 0:
+                            i_chg = i_multipole
+                            k_chg = k_multipole
+                        elif highest_multipole_moment >= 0:
+                            i_chg = i_multipole[0]
+                            k_chg = k_multipole[0]
+                        if highest_multipole_moment >= 1:
+                            i_dip = i_multipole[1:4]
+                            k_dip = k_multipole[1:4]
+                        if highest_multipole_moment >= 2:
+                            i_quad = i_multipole[4:9]
+                            k_quad = k_multipole[4:9]
+                        if highest_multipole_moment >= 3:
+                            i_oct = i_multipole[9:]
+                            k_oct = k_multipole[9:]
+                        
+                        # TODO get the r_vec from the graph edges instead
+                        # these could all be computed for the graph ahead of time
+                        r_vec = k_pt-i_pt
+                        r = r_vec.norm()
+                        # r2 = r**2
+                        # r3 = r**3
+                        e = self.coulomb_constant * i_chg * k_chg / r
+                        #print("r",r)
+                        energy += e
+                        # f = self.coulomb_constant * i_chg * k_chg * r_vec / r3
+                        # forces[i_index,:] += f
+                        # forces[k_index,:] -= f
             
-            batch_energies.append(energy)
-            batch_forces.append(forces)
+            batched_energies.append(energy)
+            #batched_forces.append(forces)
             
-        # now stack the energies and forces 
-        all_energies = torch.stack(batch_energies)
-        all_forces = torch.stack(batch_forces)
+        all_energies = torch.stack(batched_energies)
+        # now convert units
+        # e**2/ang -> kcal/mol, value taken from tinker
+        kcalmol_energies = 332.0637133*all_energies
+        # kcal/mol -> ev, value taken from https://www.weizmann.ac.il/oc/martin/tools/hartree.html
+        ev_energies = 0.0433641153087705*kcalmol_energies
+
+        #all_forces = torch.cat(batched_forces)
+
+        # print("energies",len(batched_energies))
+        # print("forces",all_forces.shape)
 
         # FUTURE: add stress and virial
         return {
-            "energy": all_energies,
-            "forces": all_forces
+            "energy": ev_energies,
+            #"forces": all_forces
         }

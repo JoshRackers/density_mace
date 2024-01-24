@@ -302,6 +302,22 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
         default=0,
     )
 
+    parser.add_argument(
+        "--include_longrange",
+        help="include hellmann-feynman forces in the model",
+        action="store_true",
+        default=False,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--local_backprop_only",
+        help="for LongRangeMACE compute forces from local part only",
+        action="store_true",
+        default=False,
+        required=False,
+    )
+
     # Loss and optimization
     parser.add_argument(
         "--loss",
@@ -316,6 +332,7 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
             "dipole",
             "energy_forces_dipole",
             "multipoles",
+            "energy_forces_multipoles"
         ],
     )
     parser.add_argument(
@@ -344,6 +361,9 @@ def build_default_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--dipole_weight", help="weight of dipoles loss", type=float, default=1.0
+    )
+    parser.add_argument(
+        "--multipole_weight", help="weight of multipole loss", type=float, default=1.0
     )
     parser.add_argument(
         "--swa_dipole_weight",
